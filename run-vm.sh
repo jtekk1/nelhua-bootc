@@ -1,8 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}"
+# Usage: TYPE=qcow2 ./run-vm.sh [mango|kde]
+DESKTOP="${1:-${DESKTOP:-mango}}"
 TYPE="${TYPE:-qcow2}"
+
+case "$DESKTOP" in
+  mango) IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
+  kde)   IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
+  *) echo "Unknown desktop: $DESKTOP (mango | kde)" >&2; exit 1 ;;
+esac
 
 cd "$(dirname "$0")"
 
@@ -15,8 +22,8 @@ fi
 if [[ ! -f "$image_file" ]]; then
   echo "Image not found: $image_file" >&2
   case "$TYPE" in
-    qcow2) echo "Build first with ./build-qcow2.sh" >&2 ;;
-    iso)   echo "Build first with ./build-iso.sh" >&2 ;;
+    qcow2) echo "Build first with ./build-qcow2.sh ${DESKTOP}" >&2 ;;
+    iso)   echo "Build first with ./build-iso.sh ${DESKTOP}" >&2 ;;
     *)     echo "Unknown TYPE=$TYPE" >&2 ;;
   esac
   exit 1
@@ -44,7 +51,6 @@ EOF
   exit 1
 fi
 
-# Fallback: direct qemu.
 exec qemu-system-x86_64 \
   -enable-kvm \
   -machine q35,accel=kvm \

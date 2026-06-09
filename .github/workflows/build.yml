@@ -15,51 +15,84 @@ on:
   workflow_dispatch:         # manual -> :stable
 
 env:
-  IMAGE_DESC: "Nelhua Linux bootc (Mango edition)"
-  IMAGE_KEYWORDS: "bootc,fedora,mango,nelhua"
-  IMAGE_NAME: "nelhua-mango"
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   build_push:
-    name: Build and push
+    name: ${{ matrix.desktop.name }} / ${{ matrix.channel.name }}
     runs-on: ubuntu-24.04
+    # Rawhide is best-effort — F45 / kinoite:rawhide may lack repo parity.
+    # Don't fail the workflow when rawhide cells break; stable cells are binding.
+    continue-on-error: ${{ matrix.channel.name == 'rawhide' }}
     permissions:
       contents: read
       packages: write
       id-token: write
 
+    strategy:
+      fail-fast: false
+      matrix:
+        desktop:
+          - name: mango
+            base_repo: "quay.io/fedora/fedora-bootc"
+            image: nelhua-mango
+            description: "Nelhua Linux bootc (Mango edition)"
+            keywords: "bootc,fedora,mango,nelhua"
+          - name: kde
+            base_repo: "quay.io/fedora/fedora-kinoite"
+            image: nelhua-kde
+            description: "Nelhua Linux bootc (KDE edition)"
+            keywords: "bootc,fedora,kde,plasma,kinoite,nelhua"
+        channel:
+          - { name: stable,  base_tag: "44" }
+          - { name: rawhide, base_tag: "rawhide" }
+
     steps:
       - name: Determine channel
         id: channel
         run: |
-          # :latest tracks tip-of-main (every push to main + cron catch-up).
-          # :stable is deliberate — workflow_dispatch or a v* git tag.
-          # On a v* tag push we ALSO emit :v<tag> as an immutable pin (see
-          # metadata-action `type=ref,event=tag` below).
-          case "${{ github.event_name }}" in
-            schedule)          CHANNEL=latest ;;
-            pull_request)      CHANNEL="pr-${{ github.event.number }}" ;;
-            workflow_dispatch) CHANNEL=stable ;;
-            push)
-              if [[ "${{ github.ref_type }}" == "tag" ]]; then
-                CHANNEL=stable
-              else
-                CHANNEL=latest
-              fi
-              ;;
-            *)                 CHANNEL=latest ;;
-          esac
+          # Stable channel follows the trigger-based mapping:
+          #   - push to main         -> :latest
+          #   - push of v* tag       -> :stable (+ :v<tag>, see metadata-action)
+          #   - workflow_dispatch    -> :stable
+          #   - schedule (cron)      -> :latest (catch-up)
+          #   - pull_request         -> :pr-N
+          # Rawhide channel always tags :rawhide regardless of trigger
+          # (PRs use :rawhide-pr-N to avoid noise on shared logs).
+          if [[ "${{ matrix.channel.name }}" == "rawhide" ]]; then
+            case "${{ github.event_name }}" in
+              pull_request) CHANNEL="rawhide-pr-${{ github.event.number }}" ;;
+              *)            CHANNEL=rawhide ;;
+            esac
+          else
+            case "${{ github.event_name }}" in
+              schedule)          CHANNEL=latest ;;
+              pull_request)      CHANNEL="pr-${{ github.event.number }}" ;;
+              workflow_dispatch) CHANNEL=stable ;;
+              push)
+                if [[ "${{ github.ref_type }}" == "tag" ]]; then
+                  CHANNEL=stable
+                else
+                  CHANNEL=latest
+                fi
+                ;;
+              *)                 CHANNEL=latest ;;
+            esac
+          fi
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Prepare environment
         run: |
-          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "$GITHUB_ENV"
-          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
+          REG_LC="${IMAGE_REGISTRY,,}"
+          IMG_LC="${{ matrix.desktop.image }}"
+          IMG_LC="${IMG_LC,,}"
+          echo "IMAGE_REGISTRY=${REG_LC}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=${IMG_LC}" >> "$GITHUB_ENV"
+          echo "BASE_IMAGE=${{ matrix.desktop.base_repo }}:${{ matrix.channel.base_tag }}" >> "$GITHUB_ENV"
 
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -78,15 +111,15 @@ jobs:
           tags: |
             type=raw,value=${{ steps.channel.outputs.channel }}
             type=raw,value=${{ steps.channel.outputs.channel }}.{{date 'YYYYMMDD'}}
-            type=ref,event=tag
+            type=ref,event=tag,enable=${{ matrix.channel.name == 'stable' }}
             type=sha,enable=${{ github.event_name == 'pull_request' }}
           labels: |
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
-            org.opencontainers.image.description=${{ env.IMAGE_DESC }}
+            org.opencontainers.image.description=${{ matrix.desktop.description }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/${{ github.sha }}/Containerfile
             org.opencontainers.image.version=${{ steps.channel.outputs.channel }}.{{date 'YYYYMMDD'}}
-            io.artifacthub.package.keywords=${{ env.IMAGE_KEYWORDS }}
+            io.artifacthub.package.keywords=${{ matrix.desktop.keywords }}
             io.artifacthub.package.license=Apache-2.0
             containers.bootc=1
           sep-tags: " "
@@ -101,6 +134,11 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           oci: false
+          build-args: |
+            BASE_IMAGE=${{ env.BASE_IMAGE }}
+            IMAGE_NAME=${{ env.IMAGE_NAME }}
+            IMAGE_REGISTRY_PATH=${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+            DESKTOP=${{ matrix.desktop.name }}
 
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request'

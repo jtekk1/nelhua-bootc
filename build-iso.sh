@@ -1,16 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 
-IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}"
-TAG="${TAG:-latest}"
+# Usage: ./build-iso.sh [mango|kde] [tag]
+DESKTOP="${1:-${DESKTOP:-mango}}"
+TAG="${2:-${TAG:-latest}}"
+
+case "$DESKTOP" in
+  mango) IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
+  kde)   IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
+  *) echo "Unknown desktop: $DESKTOP (mango | kde)" >&2; exit 1 ;;
+esac
+
 BIB_IMAGE="${BIB_IMAGE:-quay.io/centos-bootc/bootc-image-builder:latest}"
 
 cd "$(dirname "$0")"
 CONFIG="${CONFIG:-$(pwd)/disk_config/iso.toml}"
 mkdir -p output
 
-# bootc-image-builder runs under sudo podman and reads from /var/lib/containers/storage
-# (rootful). `./build.sh` builds into the rootless user store. Bridge them.
 ensure_rootful_image() {
   local user_id root_id tmpdir
   user_id="$(podman images --filter reference="${IMAGE_NAME}:${TAG}" --format '{{.ID}}' | head -1 || true)"
@@ -18,7 +24,7 @@ ensure_rootful_image() {
 
   if [[ -z "$user_id" && -z "$root_id" ]]; then
     echo "Image ${IMAGE_NAME}:${TAG} not found in rootless or rootful podman." >&2
-    echo "Build it first: ./build.sh" >&2
+    echo "Build it first: ./build.sh ${DESKTOP}" >&2
     exit 1
   fi
 
