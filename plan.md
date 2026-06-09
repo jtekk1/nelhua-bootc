@@ -130,15 +130,16 @@ Long-term: have the first-boot wizard offer "you have a ZSA keyboard?" and gate 
 
 **Why now:** brew is fine for ad-hoc CLI installs but doesn't model reproducibility. Nix gives both — `nix profile install` for ad-hoc and `flake.nix` / `direnv` for project-local pinned envs. With `direnv` already in the image, the Nix story slots in cleanly.
 
-**`/nix` placement: symlink to `/var/nix`.**
-The atomic-OS pattern for runtime-writable persistent directories is `/<dir> → /var/<dir>` (same shape as `/home → /var/home`, `/opt → /var/opt`). `/var` is the only writable-and-persistent area post-deploy on a bootc/ostree system. `/nix/store` is constantly written by every installation, build, and GC — so it MUST live under `/var`. The symlink lets standard `/nix/...` paths work transparently while the actual data lives where it can be written.
+**`/nix` placement: empty directory mount point, not a symlink.**
+The Determinate Systems installer's `ostree` planner manages `/nix` via a systemd `nix.mount` unit that bind-mounts the writable store (under `/var/home/nix`) over `/nix`. For that to work, `/nix` must exist as an empty directory at build time — `bind` mounts don't bind over symlinks. (Confirmed empirically: trying `/nix → /var/nix` symlink failed with "A dependency job for nix.mount failed" because the mount target wasn't a directory.) Bluefin and Bazzite use the same empty-dir-mount-target pattern.
 
-Concrete steps in `Containerfile` (or `build.sh`), built at image time:
+Concrete step in `Containerfile`, built at image time:
 ```sh
-mkdir -p /var/nix
-ln -sfn /var/nix /nix
+mkdir -p /nix
 ```
-Order note: this can co-exist with the `/opt` real-directory fix — they're independent. The reason `/opt` had to be converted *from* a symlink (in the existing Containerfile step) is that rpm scriptlets failed on the symlink during build. Nix isn't installed via rpm — the Determinate installer populates `/nix/store` directly at first boot — so the symlink works fine for it.
+That's it. The installer creates `/var/home/nix`, the systemd mount unit, the `nixbld` users, SELinux policy, etc. at first boot.
+
+Order note: this co-exists with the `/opt` real-directory fix — they're independent. `/opt` had to be converted *from* a symlink because rpm scriptlets fail on the symlink at build time. `/nix` is built as a fresh empty directory because Determinate needs a bind-mount target. Both end up as real directories on the rootfs, just for different reasons.
 
 **Bootstrap pattern (mirroring brew):**
 - The existing `brew-setup.service` is a oneshot guarded by `ConditionPathExists=!/home/linuxbrew/.linuxbrew/bin/brew` that runs `setup-brew.sh` on first boot. Adopt the same shape:

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# nelhua-install-blesh — install ble.sh (Bash Line Editor)
+#
+# Usage:
+#   nelhua-install-blesh            # user-level install to ~/.local/share/blesh
+#   nelhua-install-blesh --user     # same (explicit)
+#   nelhua-install-blesh --system   # system-wide install to /usr/share/blesh (needs root)
+#
+# Idempotent: exits 0 if blesh is already installed in the requested scope.
+# Building block for the first-boot wizard and user-triggered "reinstall blesh" flows.
+
+set -euo pipefail
+
+usage() {
+  sed -n '/^# nelhua-install-blesh/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+SCOPE=user
+for arg in "$@"; do
+  case "$arg" in
+    --system) SCOPE=system ;;
+    --user)   SCOPE=user ;;
+    -h|--help) usage 0 ;;
+    *) echo "Unknown arg: $arg" >&2; usage 2 ;;
+  esac
+done
+
+case "$SCOPE" in
+  system)
+    PREFIX=/usr
+    MARKER=/usr/share/blesh/ble.sh
+    if [[ "$(id -u)" -ne 0 ]]; then
+      echo "--system requires root; re-running under sudo..."
+      exec sudo "$0" --system
+    fi
+    ;;
+  user)
+    PREFIX="${HOME}/.local"
+    MARKER="${HOME}/.local/share/blesh/ble.sh"
+    if [[ "$(id -u)" -eq 0 ]]; then
+      echo "--user must run as a regular user, not root." >&2
+      exit 1
+    fi
+    ;;
+esac
+
+if [[ -f "$MARKER" ]]; then
+  echo "ble.sh already installed at $MARKER — skipping."
+  exit 0
+fi
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+git clone --recursive --depth 1 --shallow-submodules \
+  https://github.com/akinomyoga/ble.sh.git "$tmp/blesh"
+make -C "$tmp/blesh" install PREFIX="$PREFIX"
+echo "ble.sh installed to $PREFIX/share/blesh"

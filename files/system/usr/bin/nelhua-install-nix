@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# nelhua-install-nix — install Determinate Nix (multi-user, daemon-managed)
+#
+# Usage:
+#   nelhua-install-nix
+#
+# Runs the Determinate Systems installer non-interactively. Determinate is
+# chosen over the official upstream installer because:
+#   - Handles SELinux-enforcing systems out of the box
+#   - Atomic / immutable rootfs aware (uses the `ostree` planner)
+#   - Manages nix-daemon as a proper systemd unit
+#
+# The /nix directory is pre-created (empty) in the bootc image so Determinate
+# can bind-mount its store over it. /var/home/nix is the writable backing.
+#
+# Idempotent: exits 0 if nix is already installed. Building block for the
+# first-boot wizard, nix-setup.service oneshot, and user-triggered reinstalls.
+
+set -euo pipefail
+
+NIX=/nix/var/nix/profiles/default/bin/nix
+
+if [[ -x "$NIX" ]]; then
+  echo "Nix already installed at $NIX — skipping."
+  exit 0
+fi
+
+# Determinate's installer self-escalates via sudo, so callable from either
+# root (systemd oneshot) or user (manual reinstall) context.
+echo "Installing Determinate Nix..."
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
+  | sh -s -- install --determinate --no-confirm linux
+
+echo "Nix installed. Open a new shell or 'source /etc/profile.d/nix.sh' to pick up nix in PATH."

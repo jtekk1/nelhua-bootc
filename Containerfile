@@ -30,6 +30,16 @@ ENV DESKTOP=${DESKTOP}
 # Idempotent — no-op if /opt is already a regular dir.
 RUN if [ -L /opt ]; then rm /opt && mkdir -p /opt; fi
 
+# Nix store needs to be writable at runtime. The Determinate Systems installer's
+# ostree planner expects `/nix` as an empty directory mount point at build time,
+# then bind-mounts its writable backing store (under /var/home/nix) over it via
+# a systemd nix.mount unit at install time. A SYMLINK does not work here — you
+# can't bind mount over a symlink, which fails with "A dependency job for
+# nix.mount failed". Bluefin and Bazzite use the same empty-dir-mount-target
+# pattern. The Determinate installer handles all of mount/perms/SELinux setup
+# at first boot via nix-setup.service.
+RUN mkdir -p /nix
+
 # Single RUN performs all customization. Bind-mounts give the script access to
 # /ctx (build_files + cosign.pub + repo files) and /system-files (files/system
 # tree, merged into rootfs at the end of the script).
