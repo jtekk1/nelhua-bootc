@@ -1,6 +1,6 @@
 # Global ARG declared before any FROM — allows overriding the base via
 # --build-arg BASE_IMAGE=... (CI matrix builds stable vs rawhide this way).
-ARG BASE_IMAGE=quay.io/fedora/fedora-bootc:44
+ARG BASE_IMAGE=quay.io/fedora/fedora-bootc:45
 
 # Build-context staging — kept off the final image via bind-mounts during RUN.
 FROM scratch AS ctx
