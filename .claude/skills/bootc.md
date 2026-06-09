@@ -29,6 +29,21 @@ Key implication: **the OS is a single OCI image**. There is no separate "base sy
 
 `bootc switch --mutate-in-place --transport registry <image>` is the kickstart-friendly form — see `disk_config/iso.toml`'s `%post` section in this repo.
 
+### `bootc upgrade` vs `rpm-ostree upgrade` when layered packages exist
+
+`bootc upgrade` is strict — it **refuses to run** when the booted deployment has any `rpm-ostree install`-layered packages, returning:
+
+```
+error: Upgrading: Deployment contains local rpm-ostree modifications; cannot upgrade via bootc. You can run `rpm-ostree reset` to undo the modifications.
+```
+
+This is by design: the OCI image layer model and the rpm-ostree package layer model can't be safely composed. Two recovery paths:
+
+1. **Drop the overrides** — `sudo rpm-ostree reset` removes all layered packages and overrides, returning the deployment to pure bootc state. Then `sudo bootc upgrade` works. Use this when the layered packages are about to be baked into the new image anyway (typical dev workflow: layer for the day, reset when the bake catches up).
+2. **Use `rpm-ostree upgrade`** — works in *both* cases. Dispatches to bootc when there are no modifications, stays in rpm-ostree-land when there are. Less canonical but always works.
+
+The `nelhua-update` wrapper (planned, task 3 in plan.md) tries `bootc upgrade` first and falls back to `rpm-ostree upgrade` on this specific error. That's the pragmatic answer for users who layer packages during dev.
+
 ## Containerfile patterns for bootc
 
 Base images you'll see in this ecosystem:
