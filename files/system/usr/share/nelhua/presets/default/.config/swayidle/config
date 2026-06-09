@@ -1,0 +1,12 @@
+# Timeout: 5 mins (300s) -> Lock Screen
+timeout 600 'swaylock -F -f -C ~/.config/swaylock/config'
+
+# Timeout: 10 mins (600s) -> Turn off Screen
+timeout 660 "wlopm --off '*'" resume "wlopm --on '*'"
+
+# Timeout: 2 hours (7200s) -> Suspend PC
+timeout 7200 'loginctl suspend'
+
+# Before Sleep -> Lock Screen
+# (Requires swaylock installed)
+# before-sleep 'swaylock -F -f -C ~/.config/swaylock/config'

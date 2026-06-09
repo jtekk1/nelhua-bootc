@@ -1,0 +1,14 @@
+# Nelhua flatpak offerings — read by /usr/libexec/nelhua/first-boot-setup
+# Format: <flatpak-id>|<display label>
+# Lines starting with # are ignored. Order is preserved in the checklist.
+com.discordapp.Discord|Discord
+com.obsproject.Studio|OBS Studio
+org.kde.kdenlive|Kdenlive
+fr.handbrake.ghb|HandBrake
+com.bitwarden.desktop|Bitwarden
+io.github.kolunmi.Bazaar|Bazaar (app store)
+com.valvesoftware.Steam|Steam
+com.heroicgameslauncher.hgl|Heroic Games Launcher
+net.lutris.Lutris|Lutris
+com.valvesoftware.Steam.CompatibilityTool.Proton-GE|Proton-GE (Steam compat tool)
+org.freedesktop.Platform.VulkanLayer.MangoHud|MangoHud

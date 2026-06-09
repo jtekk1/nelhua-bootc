@@ -1,0 +1,6 @@
+[terminal]
+vt = 7
+
+[default_session]
+command = "tuigreet -tr -s /usr/share/wayland-sessions -g '!!! Welcome To Fedora w/ MangoWM !!!' --remember-session --power-shutdown 'loginctl poweroff' --power-reboot 'loginctl reboot'"
+user = "greetd"

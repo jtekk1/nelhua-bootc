@@ -1,0 +1,42 @@
+# bootc-image-builder config for the Nelhua-Linux (Mango) installer ISO.
+#
+# Enforces a partition layout sized for bootc's upgrade cadence:
+#   - 1 GiB ESP and 1 GiB /boot (fits multiple staged kernels + initramfs)
+#   - LUKS2 + btrfs root grows to fill the disk
+#   - No LVM, no separate /var (ostree manages /var inside the btrfs root)
+#
+# Anaconda still prompts interactively for: target disk, LUKS passphrase,
+# user account, timezone, network. Only the partition shape is enforced.
+
+[customizations.installer.kickstart]
+contents = """
+clearpart --all --initlabel
+
+part /boot/efi --fstype=efi --size=1024
+part /boot --fstype=ext4 --size=1024
+part / --fstype=btrfs --grow --encrypted --luks-version=luks2
+
+%post --erroronfail
+bootc switch --mutate-in-place --transport registry ghcr.io/jtekk1/nelhua-mango:stable
+%end
+"""
+
+[customizations.installer.modules]
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Storage",
+  "org.fedoraproject.Anaconda.Modules.Runtime",
+  "org.fedoraproject.Anaconda.Modules.Network",
+  "org.fedoraproject.Anaconda.Modules.Security",
+  "org.fedoraproject.Anaconda.Modules.Services",
+  "org.fedoraproject.Anaconda.Modules.Users",
+  "org.fedoraproject.Anaconda.Modules.Timezone"
+]
+disable = [
+  "org.fedoraproject.Anaconda.Modules.Subscription"
+]
+
+# Kernel args at install-boot. BIB's knob for what bluebuild generate-iso couldn't
+# pass through. Tune here when diagnosing plan.md's anaconda reboot-hang
+# (e.g. append = "console=tty1 inst.nokill plymouth.enable=0").
+[customizations.kernel]
+append = ""

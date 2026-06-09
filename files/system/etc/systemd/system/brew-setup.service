@@ -1,0 +1,13 @@
+[Unit]
+Description=First-boot Homebrew bootstrap
+ConditionPathExists=!/home/linuxbrew/.linuxbrew/bin/brew
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/blue-mango/setup-brew.sh
+
+[Install]
+WantedBy=multi-user.target

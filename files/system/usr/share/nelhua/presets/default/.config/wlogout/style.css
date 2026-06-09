@@ -1,0 +1,48 @@
+window {
+    font-family: HYLeMiaoTiJ,CaskaydiaCove Nerd Font, monospace;
+    font-size: 12pt;
+    font-weight: bold;
+    color: #7ba7d1;
+    background-color: rgba(10,10,15,1.000000);
+}
+
+button {
+    background-repeat: no-repeat;
+    background-position: center;
+    font-size: 40px;
+    background-size: 60%;
+    color: #e8f4fd;
+    text-shadow: 0 0 8px rgba(123,167,209,0.600000);
+}
+
+button:hover {
+    background-size: 80%;
+    color: #e8f4fd;
+    text-shadow: 0 0 12px rgba(37,150,190,0.800000);
+    box-shadow: 0 0 25px rgba(37,150,190,0.500000);
+    transition: all 0.3s cubic-bezier(.55, 0.0, .28, 1.682), box-shadow 0.5s ease-in;
+}
+
+#lock {
+    background-image: image(url("icons/lock.jpeg"));
+}
+
+#logout {
+    background-image: image(url("icons/logout.jpeg"));
+}
+
+#logout:hover {
+    background-image: image(url("icons/logout.jpeg"));
+}
+
+#suspend {
+    background-image: image(url("icons/sleep.jpeg"));
+}
+
+#shutdown {
+    background-image: image(url("icons/power.jpeg"));
+}
+
+#reboot {
+    background-image: image(url("icons/restart.jpeg"));
+}

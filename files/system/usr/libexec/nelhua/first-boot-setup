@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -u
+
+PRESET_ROOT="/usr/share/nelhua/presets/default"
+WALLPAPER_DIR="/usr/share/backgrounds/nelhua"
+DEFAULT_WALLPAPER="${WALLPAPER_DIR}/Nelhua-01.jpeg"
+FLATPAK_LIST_FILE="/usr/share/nelhua/flatpaks.list"
+FLATHUB_REPO_URL="https://dl.flathub.org/repo/flathub.flatpakrepo"
+STATE_DIR="${HOME}/.config/nelhua"
+MARKER="${STATE_DIR}/.setup-done"
+
+mkdir -p "${STATE_DIR}"
+
+dialog --backtitle "Nelhua Linux — First Boot" \
+       --title "Welcome" \
+       --yesno "Install the default nelhua mango setup?\n\n(waybar, wofi, mako, kanshi, swayidle/lock/osd, wlogout, kitty/foot, fastfetch, GTK theming, tekktonic, and a wallpaper)" \
+       12 70
+case $? in
+    0) install_default=1 ;;
+    *) install_default=0 ;;
+esac
+
+if (( install_default )); then
+    clear
+    echo "Installing default preset..."
+    mkdir -p "${HOME}/.config"
+    rsync -a "${PRESET_ROOT}/.config/" "${HOME}/.config/"
+
+    # Substitute __HOME__ placeholder in any text config files
+    grep -rlZ "__HOME__" "${HOME}/.config" 2>/dev/null \
+        | xargs -0 -r sed -i "s|__HOME__|${HOME}|g"
+
+    # Wire up the wallpaper symlink that mango's autostart.conf expects
+    mkdir -p "${HOME}/.config/ThemeSwitcher"
+    ln -sf "${DEFAULT_WALLPAPER}" "${HOME}/.config/ThemeSwitcher/wallpaper"
+
+    echo "Default preset installed."
+fi
+
+dialog --backtitle "Nelhua Linux — First Boot" \
+       --title "Alternative Shell" \
+       --yesno "Install an alternative shell (noctalia or DankMaterialShell)?\n\n(These would replace waybar/wofi/mako with a Quickshell-based bar.)" \
+       10 70
+case $? in
+    0) want_shell=1 ;;
+    *) want_shell=0 ;;
+esac
+
+if (( want_shell )); then
+    dialog --backtitle "Nelhua Linux — First Boot" \
+           --title "Coming Soon" \
+           --msgbox "Alternative shells are not yet wired up.\n\nThey will be fetched from upstream once support is added.\nSkipping for now." \
+           9 60
+fi
+
+# Build flatpak checklist from /usr/share/nelhua/flatpaks.list
+declare -a CHECKLIST_ARGS=()
+if [[ -r "${FLATPAK_LIST_FILE}" ]]; then
+    while IFS='|' read -r id label; do
+        [[ -z "${id}" || "${id}" =~ ^[[:space:]]*# ]] && continue
+        CHECKLIST_ARGS+=("${id}" "${label}" "on")
+    done < "${FLATPAK_LIST_FILE}"
+fi
+
+if (( ${#CHECKLIST_ARGS[@]} > 0 )); then
+    SELECTED=$(dialog --backtitle "Nelhua Linux — First Boot" \
+                      --title "System Flatpaks" \
+                      --separate-output \
+                      --checklist "Select flatpaks to install (SPACE to toggle, ENTER to confirm).\nUncheck anything you don't want. Make sure you're online." \
+                      20 78 12 \
+                      "${CHECKLIST_ARGS[@]}" \
+                      3>&1 1>&2 2>&3)
+    checklist_rc=$?
+else
+    SELECTED=""
+    checklist_rc=1
+fi
+
+if (( checklist_rc == 0 )) && [[ -n "${SELECTED}" ]]; then
+    mapfile -t SELECTED_IDS <<< "${SELECTED}"
+    clear
+    echo "Installing ${#SELECTED_IDS[@]} flatpak(s). You may be prompted for your password."
+    echo
+    sudo flatpak remote-add --system --if-not-exists flathub "${FLATHUB_REPO_URL}"
+    sudo flatpak remote-modify --system --enable flathub
+    sudo flatpak install --system --noninteractive --or-update flathub "${SELECTED_IDS[@]}"
+    flatpak_rc=$?
+    echo
+    if (( flatpak_rc == 0 )); then
+        dialog --backtitle "Nelhua Linux — First Boot" \
+               --title "Flatpaks Installed" \
+               --msgbox "Installed ${#SELECTED_IDS[@]} flatpak(s) successfully." \
+               7 60
+    else
+        dialog --backtitle "Nelhua Linux — First Boot" \
+               --title "Flatpak Install Errors" \
+               --msgbox "Some flatpaks failed to install (exit ${flatpak_rc}).\n\nYou can retry individual ones later with:\n  sudo flatpak install --system flathub <id>" \
+               10 70
+    fi
+fi
+
+touch "${MARKER}"
+
+dialog --backtitle "Nelhua Linux — First Boot" \
+       --title "Setup Complete" \
+       --msgbox "Setup is complete.\n\nReturning to the login screen so your new mango session picks up the settings." \
+       9 60
+clear
+
+# Kick the user back to tui-greet so the next mango session is fresh and
+# loads the just-installed config. Without this, mango is left running with
+# no terminal in front of it — symptom: black screen, no way to log in.
+# Try a graceful session terminate first, fall back to killing mango itself.
+echo "Restarting your session..."
+sleep 1
+if [[ -n "${XDG_SESSION_ID:-}" ]]; then
+  loginctl terminate-session "${XDG_SESSION_ID}" 2>/dev/null || true
+fi
+pkill -KILL -u "${USER}" mango 2>/dev/null || true

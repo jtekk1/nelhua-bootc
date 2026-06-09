@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkMenu" id="menu">
+    <child>
+      <object class="GtkMenuItem" id="tiling">
+        <property name="label"> Tiling</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="dwindle">
+        <property name="label">󰨇 Dwindle</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="centerTiling">
+        <property name="label"> Center Tiling</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="rightTiling">
+        <property name="label"> Right Tiling</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="verticalTiling">
+        <property name="label">󱂩 Vertical Tiling</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="delimiter1" />
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="scrolling">
+        <property name="label"> Scrolling</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="verticalScrolling">
+        <property name="label">󰽿 Vertical Scrolling</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="delimiter2" />
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="grid">
+        <property name="label">󰋁 Grid</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="verticalGrid">
+        <property name="label">󰋁 Vertical Grid</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="delimiter3" />
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="deck">
+        <property name="label"> Deck</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="verticalDeck">
+        <property name="label"> Vertical Deck</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="delimiter4" />
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="monocle">
+        <property name="label">󰍹 Monocle</property>
+      </object>
+    </child>
+  </object>
+</interface>

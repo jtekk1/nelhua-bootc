@@ -1,0 +1,6 @@
+# Default install-time configuration for Nelhua-Linux (Mango).
+# Consumed by bootc-image-builder and `bootc install` to determine the
+# root filesystem when no explicit override is given.
+
+[install.filesystem.root]
+type = "btrfs"

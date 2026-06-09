@@ -1,0 +1,141 @@
+@import "./waybar.css";
+
+* {
+  font-family:
+    CaskaydiaCove Nerd Font,
+    FontAwesome,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  border: none;
+  font-size: 12px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+window#waybar {
+  background: transparent;
+}
+
+/* .modules-left, */
+/* .modules-right, */
+.modules-center {
+  background-color: transparent;
+  padding: 4px;
+  border: 1px solid shade(alpha(@bg3, 1), 1.1);
+  border-radius: 20px;
+  background: linear-gradient(
+    45deg,
+    shade(alpha(@bg1, 0.95), 0.8) 0%,
+    shade(alpha(@bg2, 0.95), 0.8) 25%,
+    shade(alpha(@bg3, 0.95), 0.8) 50%,
+    shade(alpha(@bg2, 0.95), 0.8) 75%,
+    shade(alpha(@bg1, 0.95), 0.8) 100%
+  );
+
+
+} 
+
+.modules-left,
+.modules-right {
+  margin: 0 12px;
+  border-radius: 20px;
+  border: 1px solid shade(alpha(@bg3, 1), 1.1);
+  background: linear-gradient(
+    45deg,
+    shade(alpha(@bg1, 0.95), 0.8) 0%,
+    shade(alpha(@bg2, 0.95), 0.8) 25%,
+    shade(alpha(@bg3, 0.95), 0.8) 50%,
+    shade(alpha(@bg2, 0.95), 0.8) 75%,
+    shade(alpha(@bg1, 0.95), 0.8) 100%
+  );
+
+
+}
+
+#workspaces {
+  background: transparent;
+  padding: 0 5px;
+  margin: 0 5px 0 5px;
+  box-shadow: none;
+  color: @fg1;
+  font-weight: 900;
+}
+
+#workspaces button {
+  padding: 0px 2px;
+  margin: 0px 2px;
+  border-radius: 4px;
+  background: transparent;
+  color: @fg2;
+  transition: all 0.5s ease-in-out;
+}
+
+#workspaces button:hover {
+  background-color: @bg3;
+  color: @fg3;
+}
+
+#workspaces button.active {
+  background: linear-gradient(
+    135deg,
+    shade(alpha(@bg1, 1), 0.7) 0%,
+    shade(alpha(@bg1, 1), 1.0) 50%,
+    shade(alpha(@bg1, 1), 0.7) 100%
+  );
+  border: 2px solid @bg3;
+  color: @fg2;
+  min-width: 40px;
+  transition: all 0.85s ease-in-out;
+}
+
+#workspaces button.hidden {
+  color: alpha(@fg2, 0.4);
+  font-weight: 300;
+}
+
+#battery,
+#bluetooth,
+#clock,
+#cpu,
+#custom-left-cap,
+#custom-right-cap,
+#custom-monitor-toggle,
+#custom-power,
+#custom-weather,
+#custom-updates,
+#custom-tekkrpm-updates,
+#disk,
+#idle_inhibitor,
+#memory,
+#network,
+#temperature,
+#tray,
+#window,
+#wireplumber {
+  background-color: transparent;
+  color: @fg1;
+  padding: 0 2px;
+  margin: 0 6px;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+#custom-left-cap,
+#custom-right-cap {
+  font-size: 22px;
+}
+
+menu {
+    border-radius: 5px;
+    background: @bg2;
+    color: @fg2;
+}
+
+menuitem {
+    border-radius:15px;
+    padding: 3px;
+}

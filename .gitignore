@@ -1,0 +1,14 @@
+# Cosign private keys — NEVER commit
+cosign.key
+cosign.private
+
+# Local build artifacts
+output/
+_build_*
+_build-*/**
+*.iso*
+nelhua-linux-*.iso-CHECKSUM
+
+# Editor / OS noise
+.DS_Store
+*.swp

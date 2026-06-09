@@ -1,0 +1,95 @@
+
+add_newline = true
+format = "[](fg:#19E4AF)$username$hostname[](bg:#727169 fg:#19E4AF)$container$nix_shell[](bg:#7fb4ca fg:#727169)$directory[](bg:#19E4AF fg:#7fb4ca)$git_branch$git_status[](bg:#727169 fg:#19E4AF)$golang$java$nodejs$rust$python[](bg:#7fb4ca fg:#727169)$time[](fg:#7fb4ca)\n$character"
+
+[character]
+error_symbol = "[](bold fg:)"
+success_symbol = "[](bold fg:#7fb4ca)"
+vicmd_symbol = "[◀](bold fg:)"
+
+[container]
+format = "[ ⬢ $name ]($style)"
+style = "bg: fg:#090618"
+
+[directory]
+format = "[ $path ]($style)"
+style = "bg:#7fb4ca fg:#090618"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[directory.substitutions]
+Desktop = "󰟀 "
+Documents = "󰈙 "
+Downloads = " "
+Music = " "
+NixSetups = " "
+Pictures = " "
+Projects = " "
+Public = "󰐕 "
+Templates = "󰏗 "
+Videos = "󰕧 "
+"~" = "󱂵 "
+
+[docker_context]
+format = "[ $symbol $context ]($style)"
+style = "bg:#7fb4ca fg:#090618"
+symbol = " "
+
+[git_branch]
+format = "[ $symbol $branch ]($style)"
+style = "bg:#19E4AF fg:#090618"
+symbol = "󰘬"
+
+[git_status]
+format = "[$all_status$ahead_behind ]($style)"
+style = "bg:#19E4AF fg:#090618"
+
+[golang]
+format = "[ $symbol ($version) ]($style)"
+style = "bg: fg:#090618"
+symbol = "󰟓 "
+
+[hostname]
+format = "[@$hostname $ssh_symbol]($style)"
+ssh_only = false
+ssh_symbol = ""
+style = "bg:#19E4AF fg:#090618"
+
+[java]
+format = "[ $symbol ($version) ]($style)"
+style = "bg:#727169 fg:#090618"
+symbol = " "
+
+[nix_shell]
+format = "[ $symbol $name ]($style)"
+heuristic = true
+style = "bg:#727169 fg:#090618"
+symbol = " "
+
+[nodejs]
+format = "[ $symbol ($version) ]($style)"
+style = "bg:#727169 fg:#090618"
+symbol = "󰌞󰛦"
+
+[python]
+format = "[${symbol}${version} ]($style)"
+style = "bg:#727169 fg:#090618"
+symbol = " 🐍 "
+version_format = "${raw}"
+
+[rust]
+format = "[ $symbol ($version) ]($style)"
+style = "bg:#727169 fg:#090618"
+symbol = "󱘗 "
+
+[time]
+disabled = false
+format = "[ 󰅐 $time ]($style)"
+style = "bg:#7fb4ca fg:#090618"
+time_format = "%R"
+
+[username]
+format = "[ $user]($style)"
+show_always = true
+style_root = "bg:#19E4AF fg:#090618"
+style_user = "bg:#19E4AF fg:#090618"

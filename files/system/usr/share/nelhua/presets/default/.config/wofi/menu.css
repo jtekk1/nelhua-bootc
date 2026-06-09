@@ -1,0 +1,72 @@
+/* WOFI COLORS */ 
+@define-color bg1 #8959a8;
+@define-color bg2 #f5871f;
+@define-color bg3 #3e999f;
+@define-color fg1 #ffffff; /* Removed the duplicate black definition */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 14px;
+}
+
+window {
+  margin: 0px;
+  border: 4px solid @bg1;
+  border-radius: 10px;
+  background: transparent;
+}
+
+#input {
+  /* Hiding the input box specifically for the wallpaper switcher looks cleaner */
+  /* If you want to keep it, leave this block. If not, set visibility: hidden; */
+  margin: 2px;
+  padding: 2px;
+  border: 2px solid @bg1;
+  border-radius: 8px;
+  background-color: @bg3;
+  color: @fg1;
+  font-weight: bold;
+}
+
+#inner-box {
+  margin: 5px;
+  background-color: transparent;
+}
+
+#outer-box {
+  margin: 5px;
+  padding: 5px;
+  background-color: transparent;
+}
+
+#scroll {
+  margin: 0px;
+  background-color: transparent;
+}
+
+/* Hide the text completely so only images show */
+#text {
+    font-size: 20px;
+    color: white;
+    margin: 0px;
+    padding: 0px;
+    border: none;
+}
+
+#entry {
+    margin: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: transparent;
+}
+
+/* Highlight the selected image */
+#entry:selected {
+    background-color: transparent;
+    border: 3px solid @bg1;
+}
+
+#img {
+    margin: 0px;
+    background-color: transparent;
+}

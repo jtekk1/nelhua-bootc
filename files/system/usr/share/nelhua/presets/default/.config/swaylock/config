@@ -1,0 +1,35 @@
+bs-hl-color=#5f799c
+clock
+color=#0e1b2d
+datestr=%a, %b %d
+effect-blur=3x10
+effect-vignette=0.5:0.5
+fade-in=0.200000
+font=CaskaydiaMono Nerd Font
+font-size=24
+grace=2
+grace-no-mouse
+grace-no-touch
+indicator
+indicator-radius=100
+indicator-thickness=7
+inside-clear-color=#192b43
+inside-color=#0e1b2d
+inside-ver-color=#5f799c
+inside-wrong-color=#FF0000
+key-hl-color=#a1bee1
+line-clear-color=#192b43
+line-color=#0e1b2d
+line-ver-color=#0e1b2d
+line-wrong-color=#0e1b2d
+ring-clear-color=#07101a
+ring-color=#07101a
+ring-ver-color=#5f799c
+ring-wrong-color=#FF0000
+image=$HOME/.config/swaylock/current-wallpaper
+separator-color=00000000
+text-clear-color=#FFFFFF
+text-color=#FFFFFF
+text-ver-color=#FFFFFF
+text-wrong-color=#FFFFFF
+timestr=%H:%M
