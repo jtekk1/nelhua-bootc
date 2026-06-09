@@ -1,0 +1,18 @@
+[Unit]
+Description=Nelhua: first-boot Nix bootstrap (Determinate)
+Documentation=https://docs.determinate.systems/
+ConditionPathExists=!/nix/var/nix/profiles/default/bin/nix
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Determinate installer needs root to set up nix-daemon, /nix store perms,
+# nixbld system users, and the systemd integration.
+ExecStart=/usr/libexec/nelhua/setup-nix.sh
+# Allow plenty of time on slow networks — the installer downloads ~150 MB.
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target

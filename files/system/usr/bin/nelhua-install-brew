@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# nelhua-install-brew — install Homebrew in the standard Nelhua location
+#
+# Usage:
+#   nelhua-install-brew
+#
+# Creates a `linuxbrew` system user if missing and runs the official Homebrew
+# installer as that user. Brew lives at /home/linuxbrew/.linuxbrew/.
+#
+# Idempotent: exits 0 if brew is already present. Building block for the
+# first-boot wizard, the brew-setup.service oneshot, and user-triggered reinstalls.
+
+set -euo pipefail
+
+BREW=/home/linuxbrew/.linuxbrew/bin/brew
+
+if [[ -x "$BREW" ]]; then
+  echo "Homebrew already installed at $BREW — skipping."
+  exit 0
+fi
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "nelhua-install-brew needs root to create the linuxbrew user; re-running under sudo..."
+  exec sudo "$0" "$@"
+fi
+
+getent passwd linuxbrew >/dev/null || \
+  useradd -r -m -d /var/home/linuxbrew -s /bin/bash linuxbrew
+
+runuser -u linuxbrew -- env NONINTERACTIVE=1 /bin/bash -c \
+  '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+
+echo "Homebrew installed at $BREW."
+echo 'Add to your shell: eval "$('"$BREW"' shellenv)"'

@@ -181,16 +181,6 @@ install_extras() {
     qemu-device-display-virtio-gpu
 }
 
-install_blesh() {
-  log "install_blesh"
-  local tmp
-  tmp="$(mktemp -d)"
-  git clone --recursive --depth 1 --shallow-submodules \
-    https://github.com/akinomyoga/ble.sh.git "$tmp/blesh"
-  make -C "$tmp/blesh" install PREFIX=/usr
-  rm -rf "$tmp"
-}
-
 install_superfile() {
   log "install_superfile"
   if [[ -x /usr/bin/spf ]]; then
@@ -220,9 +210,13 @@ apply_files() {
   rsync -rlptD /system-files/ /
 }
 
-enable_brew_setup() {
-  log "enable_brew_setup"
+enable_first_boot_services() {
+  log "enable_first_boot_services"
+  # Both are oneshot units guarded by ConditionPathExists so they run exactly
+  # once per fresh deployment. Units live in files/system/etc/systemd/system/
+  # and were just rsync'd in by apply_files.
   systemctl enable brew-setup.service
+  systemctl enable nix-setup.service
 }
 
 remove_unwanted() {
@@ -323,10 +317,9 @@ main() {
   setup_plymouth
   install_desktop      # dispatches to install_desktop_mango or install_desktop_kde
   install_extras
-  install_blesh
   install_superfile
-  apply_files          # ship system tree (including brew-setup.service unit)
-  enable_brew_setup
+  apply_files          # ship system tree (including brew-setup + nix-setup units)
+  enable_first_boot_services
   remove_unwanted
   apply_signing
   apply_os_release
