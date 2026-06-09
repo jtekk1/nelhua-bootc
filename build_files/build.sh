@@ -14,16 +14,23 @@ OS_PRETTY="$(. /etc/os-release && echo "${PRETTY_NAME}")"
 IS_RAWHIDE=0
 [[ "$OS_PRETTY" == *"Rawhide"* ]] && IS_RAWHIDE=1
 
-# DNF behavior knobs: on rawhide, third-party repos (Terra, Tekk) may not yet
-# have published the upcoming version. Allow the build to continue with the
-# subset of packages that DO resolve, rather than failing the whole transaction.
-# On stable, stay strict so missing-package regressions are loud.
-DNF_INSTALL_OPTS=(-y)
-if (( IS_RAWHIDE )); then
-  DNF_INSTALL_OPTS+=(--skip-unavailable)
-fi
-
 log() { printf '\n--- %s ---\n' "$*"; }
+
+# dnf_install: package install helper that adjusts behavior for rawhide.
+# On rawhide, --skip-unavailable lets the transaction proceed past missing
+# packages (Terra/Tekk haven't published F45 yet). On stable, missing packages
+# are a hard fail (regression detection).
+#
+# NOTE: --skip-unavailable is a per-subcommand flag in dnf5, must come AFTER
+# `install`, not before. An earlier version put it in the global slot and was
+# rejected with "Unknown argument".
+dnf_install() {
+  if (( IS_RAWHIDE )); then
+    dnf5 -y install --skip-unavailable "$@"
+  else
+    dnf5 -y install "$@"
+  fi
+}
 
 enable_repos() {
   log "enable_repos (Fedora ${OS_VERSION}, rawhide=${IS_RAWHIDE})"
@@ -78,28 +85,28 @@ enable_repos() {
 
 install_base() {
   log "install_base"
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     curl dbus git gh pciutils tailscale xdg-user-dirs
   systemctl enable tailscaled.service
 
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     atuin bat bitwarden-cli eza fd fzf jq lsof plocate ripgrep rsync wget yazi zip zoxide
 
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     bluetui btop dialog dust fastfetch gdu glow impala lazygit luarocks ncdu neovim tldr wiremix
 
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install satty swappy
+  dnf_install satty swappy
 
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     cascadiacode-nerd-fonts cascadiamono-nerd-fonts jetbrainsmono-nerd-fonts \
     google-noto-sans-fonts google-noto-serif-fonts google-noto-sans-cjk-fonts \
     google-noto-color-emoji-fonts google-noto-emoji-fonts \
     fontawesome-fonts-all
 
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install udiskie wev
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install asciiquarium cmatrix
+  dnf_install udiskie wev
+  dnf_install asciiquarium cmatrix
 
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     chromium flatpak helium-browser imv kitty mpv starship stow tekktonic
 }
 
@@ -107,7 +114,7 @@ install_hardware() {
   log "install_hardware"
   # NOTE: libva-intel-driver (legacy i965) is gone in F44. intel-media-driver
   # (iHD) covers Broadwell+, mesa-va-drivers covers older Intel + AMD via Mesa.
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     mesa-dri-drivers mesa-vulkan-drivers vulkan-loader \
     amd-gpu-firmware amd-ucode-firmware lact \
     intel-media-driver mesa-va-drivers
@@ -120,7 +127,7 @@ install_hardware() {
 
 setup_plymouth() {
   log "setup_plymouth"
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install plymouth plymouth-theme-solar
+  dnf_install plymouth plymouth-theme-solar
   plymouth-set-default-theme solar || true
   # BlueBuild called `dracut -f --regenerate-all` here. In bootc, initramfs is
   # built by bootc-image-builder (or the deployed system), not the container.
@@ -130,7 +137,7 @@ setup_plymouth() {
 
 install_desktop_mango() {
   log "install_desktop_mango"
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     awww blueman cliphist greetd grim iwd kanshi mako mangowm \
     pipewire playerctl shotman slurp swaybg swayidle swaylock-effects SwayOSD \
     tuigreet wayland-utils wl-clip-persist wl-clipboard wlopm wlr-randr wlsunset \
@@ -157,9 +164,9 @@ install_desktop_kde() {
 install_extras() {
   log "install_extras"
   # gaming
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install gamescope mangohud protontricks
+  dnf_install gamescope mangohud protontricks
   # dev
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install direnv make
+  dnf_install direnv make
   # virt — tools to boot/build VMs from this OS (./run-vm.sh, dogfooding bootc images).
   # edk2-ovmf:             UEFI firmware blob for guests
   # systemd-container:     ships systemd-vmspawn (and nspawn)
@@ -167,7 +174,7 @@ install_extras() {
   # qemu-{char,ui,audio}-spice + qemu-ui-gtk + qemu-device-display-virtio-gpu:
   #   GTK + SPICE backends + virtio GPU. systemd-vmspawn --console=gui asks qemu
   #   for `-display gtk`; without qemu-ui-gtk qemu falls back to VNC silently.
-  dnf5 "${DNF_INSTALL_OPTS[@]}" install \
+  dnf_install \
     edk2-ovmf systemd-container \
     qemu-system-x86-core \
     qemu-char-spice qemu-ui-spice-app qemu-ui-gtk qemu-audio-spice \

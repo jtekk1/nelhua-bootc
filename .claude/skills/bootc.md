@@ -221,10 +221,14 @@ Practical implications:
 
 ## dnf5 quirks on fedora-bootc
 
-The fedora-bootc base image ships `dnf5` (not `dnf` / `dnf4`). Two things to know:
+The fedora-bootc base image ships `dnf5` (not `dnf` / `dnf4`). Things to know:
 
 - **`copr` is a separate plugin in dnf5.** `dnf5 copr enable foo/bar` will fail with `Unknown argument "copr"` unless you first `dnf5 -y install 'dnf5-command(copr)'`. dnf4 had copr built in; this is a regression in practice. See `enable_repos` in `build_files/build.sh` for the install-first pattern.
 - **Use `dnf5 -y install <PACKAGE-MANAGER-EXPRESSION>` for plugins**, not `dnf5 plugin install`. The plugin packages are named `dnf5-command(<name>)` (a Requires expression that resolves to the actual rpm).
+- **`--skip-unavailable` is a per-subcommand flag, not a global.** It belongs *after* `install`, not before:
+  - ✅ `dnf5 -y install --skip-unavailable foo bar`
+  - ❌ `dnf5 -y --skip-unavailable install foo bar` (errors with "Unknown argument", confusingly does list the right subcommands)
+  - The `dnf_install()` helper in `build_files/build.sh` enforces the right ordering — use it instead of inlining the flag.
 - Other dnf5-vs-dnf4 differences worth checking before reaching for: `dnf5 install`, `dnf5 remove`, `dnf5 clean all` all behave like their dnf4 counterparts.
 
 ## `bootc container lint` warnings we see and how to address them
