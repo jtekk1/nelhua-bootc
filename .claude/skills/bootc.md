@@ -169,7 +169,7 @@ Channel name in each cell maps to OCI tag set as follows.
 | All non-PR triggers | `:rawhide` (+ dated `:rawhide.YYYYMMDD`) |
 | `pull_request` | `:rawhide-pr-<N>` (+ dated) — built but **not pushed** |
 
-Rawhide cells are marked `continue-on-error: true` because Terra / Tekk / COPR repos and Kinoite-rawhide may not exist or have F45 parity yet; rawhide failures don't fail the workflow as long as the stable cells succeed. Build args wired per cell: `BASE_IMAGE=<base_repo>:<base_tag>`, `IMAGE_NAME`, `IMAGE_REGISTRY_PATH`, `DESKTOP=mango|kde`. The Containerfile declares `ARG BASE_IMAGE` globally before any `FROM`; the other three are stage-local in the final stage.
+Rawhide cells are marked `continue-on-error: true` because Terra / Tekk / COPR repos and Kinoite-rawhide may not exist or have F45 parity yet; rawhide failures don't fail the workflow as long as the stable cells succeed. Additionally, `build_files/build.sh` detects rawhide (via `PRETTY_NAME` containing "Rawhide") and downgrades to soft-fail mode for that build: third-party repo enables (Terra, Tekk) become skip-with-warning if their URL 404s, and all `dnf5 install` calls in the package-install groups use `--skip-unavailable` so missing packages don't abort the transaction. The result is a "lite" rawhide image (missing whatever Terra/Tekk/COPR haven't published yet) instead of no rawhide image. Stable stays strict — any missing package or repo on a stable build is a hard fail. Build args wired per cell: `BASE_IMAGE=<base_repo>:<base_tag>`, `IMAGE_NAME`, `IMAGE_REGISTRY_PATH`, `DESKTOP=mango|kde`. The Containerfile declares `ARG BASE_IMAGE` globally before any `FROM`; the other three are stage-local in the final stage.
 
 Important semantic: `:latest` tracks tip-of-main; `:stable` is deliberate (manual dispatch or a `v*` tag). `:latest` is never behind `:stable`; the two are equal momentarily right after a `:stable` cut, then `:latest` advances with subsequent merges. This matches the conventional UB/Bazzite/Bluefin meaning (`:latest` = moving newest, `:stable` = curated). An earlier iteration of this workflow had the mapping inverted; if you spot stale references in docs to "stable updates on push to main", that's a pre-2026-06-09 fingerprint and should be updated.
 
@@ -221,10 +221,14 @@ Practical implications:
 
 ## dnf5 quirks on fedora-bootc
 
-The fedora-bootc base image ships `dnf5` (not `dnf` / `dnf4`). Two things to know:
+The fedora-bootc base image ships `dnf5` (not `dnf` / `dnf4`). Things to know:
 
 - **`copr` is a separate plugin in dnf5.** `dnf5 copr enable foo/bar` will fail with `Unknown argument "copr"` unless you first `dnf5 -y install 'dnf5-command(copr)'`. dnf4 had copr built in; this is a regression in practice. See `enable_repos` in `build_files/build.sh` for the install-first pattern.
 - **Use `dnf5 -y install <PACKAGE-MANAGER-EXPRESSION>` for plugins**, not `dnf5 plugin install`. The plugin packages are named `dnf5-command(<name>)` (a Requires expression that resolves to the actual rpm).
+- **`--skip-unavailable` is a per-subcommand flag, not a global.** It belongs *after* `install`, not before:
+  - ✅ `dnf5 -y install --skip-unavailable foo bar`
+  - ❌ `dnf5 -y --skip-unavailable install foo bar` (errors with "Unknown argument", confusingly does list the right subcommands)
+  - The `dnf_install()` helper in `build_files/build.sh` enforces the right ordering — use it instead of inlining the flag.
 - Other dnf5-vs-dnf4 differences worth checking before reaching for: `dnf5 install`, `dnf5 remove`, `dnf5 clean all` all behave like their dnf4 counterparts.
 
 ## `bootc container lint` warnings we see and how to address them
@@ -256,6 +260,18 @@ The fedora-bootc base image ships `dnf5` (not `dnf` / `dnf4`). Two things to kno
 ### `Found non-directory/non-symlink files in /var`
 
 Same root cause as `var-tmpfiles`. Listed files (the dnf locks, countme counters, plocate cache tags) are pure state and should be deleted in `cleanup()`.
+
+## `/opt` symlink gotcha (Kinoite + recent fedora-bootc)
+
+Some Fedora bootc/atomic bases ship `/opt` as a **symlink to `/var/opt`** so it remains user-writable on the deployed system. rpm scriptlets that install into `/opt/<vendor>/` (`helium-browser`, `google-chrome`, `docker-desktop`, ...) fail at build time with `[RPM] mkdir failed - File exists` followed by `mkdir failed - No such file or directory`.
+
+Fix: replace the symlink with a real directory before any package install runs. Containerfile has an idempotent step right after the final `FROM`:
+
+```dockerfile
+RUN if [ -L /opt ]; then rm /opt && mkdir -p /opt; fi
+```
+
+Side effect: `/opt` is no longer writable at runtime (becomes part of the read-only /usr ostree commit). For Nelhua's use case (we don't expect users to manually drop binaries in /opt — they use Flatpak/Brew/Nix) that's the right trade. If a future package needs /opt to be writable post-deploy, options are (a) make that package install elsewhere via a build-time symlink swap, or (b) revert the /opt fix and find a different way to make the affected rpm install (rare).
 
 ## Anti-patterns (do not do these)
 

@@ -130,24 +130,57 @@ Long-term: have the first-boot wizard offer "you have a ZSA keyboard?" and gate 
 
 **Why now:** brew is fine for ad-hoc CLI installs but doesn't model reproducibility. Nix gives both — `nix profile install` for ad-hoc and `flake.nix` / `direnv` for project-local pinned envs. With `direnv` already in the image, the Nix story slots in cleanly.
 
+**`/nix` placement: symlink to `/var/nix`.**
+The atomic-OS pattern for runtime-writable persistent directories is `/<dir> → /var/<dir>` (same shape as `/home → /var/home`, `/opt → /var/opt`). `/var` is the only writable-and-persistent area post-deploy on a bootc/ostree system. `/nix/store` is constantly written by every installation, build, and GC — so it MUST live under `/var`. The symlink lets standard `/nix/...` paths work transparently while the actual data lives where it can be written.
+
+Concrete steps in `Containerfile` (or `build.sh`), built at image time:
+```sh
+mkdir -p /var/nix
+ln -sfn /var/nix /nix
+```
+Order note: this can co-exist with the `/opt` real-directory fix — they're independent. The reason `/opt` had to be converted *from* a symlink (in the existing Containerfile step) is that rpm scriptlets failed on the symlink during build. Nix isn't installed via rpm — the Determinate installer populates `/nix/store` directly at first boot — so the symlink works fine for it.
+
 **Bootstrap pattern (mirroring brew):**
 - The existing `brew-setup.service` is a oneshot guarded by `ConditionPathExists=!/home/linuxbrew/.linuxbrew/bin/brew` that runs `setup-brew.sh` on first boot. Adopt the same shape:
   - `files/system/etc/systemd/system/nix-setup.service` — oneshot, `ConditionPathExists=!/nix/var/nix/profiles/default/bin/nix`
-  - `files/system/usr/libexec/blue-mango/setup-nix.sh` — the actual installer invocation
+  - `files/system/usr/libexec/nelhua/setup-nix.sh` — the actual installer invocation
   - `build_files/build.sh` `enable_brew_setup` extends to `enable_first_boot_services` and enables both units
-- Pre-create `/nix` as a real directory at build time (not a symlink). bootc/ostree treats `/` as read-only post-deploy except for known paths; `/nix` needs to be writable and ideally on its own mount or a writable subvolume. This is the load-bearing detail — without it, the installer fails.
 
 **Which Nix installer:**
 - **Determinate Systems' installer** (`curl -L https://install.determinate.systems/nix | sh -s -- install --determinate`) — handles SELinux-enforcing systems, atomic distros, and immutable rootfs better than the official installer. Recommended starting point.
 - Official multi-user installer is the fallback if we don't want Determinate's daemon.
 
 **Open sub-questions:**
-- Where does `/nix` live? Options: dedicated subvolume (clean, requires installer to provision), bind-mount of `/var/lib/nix-store` (works without partitioning), or first-boot `mkdir -p /nix` + the installer puts everything there (simplest).
 - Channel/flake defaults? Ship a default `~/.config/nix/nix.conf` enabling `experimental-features = nix-command flakes`? Or leave fully unopinionated?
 - Auto-add a default Nix channel during setup, or let the user pick?
 - Do we want `nixpkgs` mirror configured to a fast/local source (`forgejo.jtekk.dev`?) or default upstream?
 
 **Coordination with stage1 (Jaguar):** Jaguar's PRD currently lists Flatpak + Distrobox + Homebrew as the user-level managers. If Nix proves out in stage0, propose adding it to the Jaguar plan at promotion time.
+
+## rawhide / TekkRPM F45 work
+
+`{mango, rawhide}` is currently excluded from `.github/workflows/build.yml`'s matrix because the build produces an unbootable image (no compositor). KDE rawhide stays in as a canary for Kinoite-rawhide regressions. The path to re-enable mango rawhide has two prerequisites that need separate attention.
+
+### B. Stand up a `fedora-45` Forgejo Actions runner
+
+TekkRPM workflows (`~/Projects/TekkRPMs/<pkg>/.forgejo/workflows/*.yml`) currently matrix over `fedora: [43, 44]` and `runs-on: fedora-${{ matrix.fedora }}` — meaning your Forgejo runner pool has hosts labeled `fedora-43` and `fedora-44`. To publish F45 RPMs, you need a runner labeled `fedora-45` running on Fedora 45 (or rawhide). Options:
+- Bare-metal / VM host on F45 with Forgejo Actions runner installed + labeled
+- Container-based runner that uses `fedora:rawhide` as the build environment
+- Wait for `frank-da-tank` (PRD §14) and use it for rawhide builds
+
+Once that runner exists, bumping each TekkRPM workflow's `matrix.fedora` from `[43, 44]` to `[43, 44, 45]` is a 1-line per workflow change.
+
+### C. Survey which TekkRPMs are blocked on Terra45 vs runner-only
+
+Some TekkRPMs depend on Terra (Fyralabs's third-party repo). They're blocked on Fyralabs publishing terra45 even if the runner exists. Others build on stock Fedora and would unblock the moment the runner is up. Worth a quick `grep` across `~/Projects/TekkRPMs/*/.forgejo/workflows/*.yml` for "terra" to bucket each package.
+
+Bootc image consumers from TekkRPMs (verify their terra dependency status):
+- `mangowm` — terra-dependent (scenefx), `mangowm-wl-only` variant doesn't need terra
+- `awww`, `bluetui`, `helium-browser`, `impala`, `shotman`, `wayland-pipewire-idle-inhibit`, `wl-clip-persist` — status unknown, grep needed
+
+If most are not terra-dependent, mango rawhide is one runner away. If most are terra-dependent, we wait on Fyralabs and the runner doesn't help much.
+
+A pragmatic interim once both unblock: switch `install_desktop_mango` on rawhide to `mangowm-wl-only` so the desktop is bootable without terra45. Code-wise this is a per-package conditional in `install_desktop_mango` gated on `$IS_RAWHIDE`.
 
 ## KDE opinion layer (`install_desktop_kde`)
 

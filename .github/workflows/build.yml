@@ -50,6 +50,15 @@ jobs:
         channel:
           - { name: stable,  base_tag: "44" }
           - { name: rawhide, base_tag: "rawhide" }
+        # mangowm depends on scenefx from terra, and TekkRPM doesn't yet have an
+        # F45 runner — so mango/rawhide produces an unbootable image (no compositor).
+        # KDE rawhide stays in as a canary for kinoite-rawhide regressions.
+        # See plan.md "rawhide / TekkRPM F45 work" for the path to re-enable.
+        exclude:
+          - desktop:
+              name: mango
+            channel:
+              name: rawhide
 
     steps:
       - name: Determine channel
