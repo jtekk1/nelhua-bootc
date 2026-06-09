@@ -149,6 +149,31 @@ Long-term: have the first-boot wizard offer "you have a ZSA keyboard?" and gate 
 
 **Coordination with stage1 (Jaguar):** Jaguar's PRD currently lists Flatpak + Distrobox + Homebrew as the user-level managers. If Nix proves out in stage0, propose adding it to the Jaguar plan at promotion time.
 
+## rawhide / TekkRPM F45 work
+
+`{mango, rawhide}` is currently excluded from `.github/workflows/build.yml`'s matrix because the build produces an unbootable image (no compositor). KDE rawhide stays in as a canary for Kinoite-rawhide regressions. The path to re-enable mango rawhide has two prerequisites that need separate attention.
+
+### B. Stand up a `fedora-45` Forgejo Actions runner
+
+TekkRPM workflows (`~/Projects/TekkRPMs/<pkg>/.forgejo/workflows/*.yml`) currently matrix over `fedora: [43, 44]` and `runs-on: fedora-${{ matrix.fedora }}` — meaning your Forgejo runner pool has hosts labeled `fedora-43` and `fedora-44`. To publish F45 RPMs, you need a runner labeled `fedora-45` running on Fedora 45 (or rawhide). Options:
+- Bare-metal / VM host on F45 with Forgejo Actions runner installed + labeled
+- Container-based runner that uses `fedora:rawhide` as the build environment
+- Wait for `frank-da-tank` (PRD §14) and use it for rawhide builds
+
+Once that runner exists, bumping each TekkRPM workflow's `matrix.fedora` from `[43, 44]` to `[43, 44, 45]` is a 1-line per workflow change.
+
+### C. Survey which TekkRPMs are blocked on Terra45 vs runner-only
+
+Some TekkRPMs depend on Terra (Fyralabs's third-party repo). They're blocked on Fyralabs publishing terra45 even if the runner exists. Others build on stock Fedora and would unblock the moment the runner is up. Worth a quick `grep` across `~/Projects/TekkRPMs/*/.forgejo/workflows/*.yml` for "terra" to bucket each package.
+
+Bootc image consumers from TekkRPMs (verify their terra dependency status):
+- `mangowm` — terra-dependent (scenefx), `mangowm-wl-only` variant doesn't need terra
+- `awww`, `bluetui`, `helium-browser`, `impala`, `shotman`, `wayland-pipewire-idle-inhibit`, `wl-clip-persist` — status unknown, grep needed
+
+If most are not terra-dependent, mango rawhide is one runner away. If most are terra-dependent, we wait on Fyralabs and the runner doesn't help much.
+
+A pragmatic interim once both unblock: switch `install_desktop_mango` on rawhide to `mangowm-wl-only` so the desktop is bootable without terra45. Code-wise this is a per-package conditional in `install_desktop_mango` gated on `$IS_RAWHIDE`.
+
 ## KDE opinion layer (`install_desktop_kde`)
 
 `install_desktop_kde()` in `build_files/build.sh` is currently a no-op — Kinoite already ships Plasma 6 + SDDM + xdg-desktop-portal-kde + NetworkManager, which is enough to boot a usable desktop. The Nelhua opinion layer for KDE is yet to be decided. Candidates worth shipping:

@@ -22,6 +22,14 @@ ENV IMAGE_NAME=${IMAGE_NAME}
 ENV IMAGE_REGISTRY_PATH=${IMAGE_REGISTRY_PATH}
 ENV DESKTOP=${DESKTOP}
 
+# Kinoite (and recent fedora-bootc) ships /opt as a symlink to /var/opt so it
+# stays user-writable post-deploy. rpm scriptlets that install into /opt
+# (helium-browser, google-chrome, docker-desktop, ...) fail at build time
+# against that symlink with "mkdir failed: File exists / No such file or
+# directory". Replace with a real directory before any package install runs.
+# Idempotent — no-op if /opt is already a regular dir.
+RUN if [ -L /opt ]; then rm /opt && mkdir -p /opt; fi
+
 # Single RUN performs all customization. Bind-mounts give the script access to
 # /ctx (build_files + cosign.pub + repo files) and /system-files (files/system
 # tree, merged into rootfs at the end of the script).
