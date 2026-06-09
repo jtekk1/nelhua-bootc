@@ -72,17 +72,19 @@ Why bind-mounts: `/ctx` (build script + signing pubkey + repo files) and `/syste
 2. `install_base` — base CLI/TUI/GUI/fonts utilities + desktop packages
 3. `install_hardware` — Mesa, AMD/Intel firmware, vulkan loaders
 4. `setup_plymouth` — boot splash theme
-5. `install_mango` — Mango compositor + its session deps
-6. `install_extras` — gaming + dev tools
+5. **`install_desktop`** — dispatches to `install_desktop_mango` (mango WM + session deps + greetd + iwd) or `install_desktop_kde` (kinoite ships Plasma; this is the opinion layer) based on `$DESKTOP` env (set from the `DESKTOP` build-arg)
+6. `install_extras` — gaming + dev + virt tools
 7. `install_blesh` / `install_superfile` — vendored binaries from upstream releases
 8. `apply_files` — `rsync -rlptD /system-files/ /` brings the overlay tree into the image
 9. `enable_brew_setup` — enables the first-boot Homebrew bootstrap service (unit shipped via `files/system/`)
 10. `remove_unwanted` — strips out packages we don't want (e.g. firefox; the picker UX installs the user's chosen browser as a Flatpak)
 11. `apply_signing` — installs the cosign pubkey, registers it in `containers-policy.json`
-12. `apply_os_release` — sets `PRETTY_NAME`
-13. `cleanup` — disables COPRs, `dnf clean all`
+12. `apply_os_release` — sets `PRETTY_NAME` (variant-aware: "Mango Edition" vs "KDE")
+13. `cleanup_var_state` / `generate_var_tmpfiles` / `cleanup` — final scrub + tmpfiles.d
 
 **Order matters.** `apply_files` MUST run before `enable_brew_setup` because the service unit lives in `files/system/etc/systemd/system/brew-setup.service`. `enable_repos` MUST run before any `install_*`. `apply_signing` should run after `apply_files` so it doesn't get overwritten.
+
+**Variant model.** The `$DESKTOP` env (set from `--build-arg DESKTOP=...`) drives the dispatch in `install_desktop` and the `PRETTY_NAME` switch in `apply_os_release`. Kinoite ships Plasma + SDDM + xdg-desktop-portal-kde + NetworkManager, so `install_desktop_kde` is currently a no-op — the opinion layer (KDE Connect, breeze-dark default, panel layout) lives in `plan.md` task K4 as it's decided. `install_desktop_mango` installs the Wayland WM stack + greetd + iwd because fedora-bootc base has none of that.
 
 ## bootc-image-builder (BIB)
 
@@ -139,15 +141,35 @@ cosign verify --key cosign.pub ghcr.io/jtekk1/nelhua-mango:stable
 
 ## CI workflows (this repo)
 
-`build.yml` triggers and channels:
+`build.yml` is a **2D matrix** of `desktop × channel`:
 
-| Trigger | Channel tag(s) |
+| Axis | Values |
+|---|---|
+| `matrix.desktop` | `mango` (base `quay.io/fedora/fedora-bootc:N`, image `nelhua-mango`) — `kde` (base `quay.io/fedora/fedora-kinoite:N`, image `nelhua-kde`) |
+| `matrix.channel` | `stable` (base tag `44`) — `rawhide` (base tag `rawhide`) |
+
+= 4 cells per trigger: `mango/stable`, `mango/rawhide`, `kde/stable`, `kde/rawhide`. Each cell pushes to its own ghcr.io image (`nelhua-mango` or `nelhua-kde`), signed independently.
+
+Channel name in each cell maps to OCI tag set as follows.
+
+`stable` channel:
+
+| Trigger | Tag(s) |
 |---|---|
 | `push` to `main` branch | `:latest` (+ dated `:latest.YYYYMMDD`) |
 | `push` of `v*` git tag | `:stable` (+ dated) AND `:v<tag>` (immutable pin) |
 | `workflow_dispatch` | `:stable` (+ dated) |
 | `schedule` (cron, 10:05 UTC daily) | `:latest` — catch-up; main pushes already cover it |
-| `pull_request` | `:pr-<N>` and `:sha-<short>` — built but **not pushed** |
+| `pull_request` | `:pr-<N>` (+ dated) and `:sha-<short>` — built but **not pushed** |
+
+`rawhide` channel:
+
+| Trigger | Tag(s) |
+|---|---|
+| All non-PR triggers | `:rawhide` (+ dated `:rawhide.YYYYMMDD`) |
+| `pull_request` | `:rawhide-pr-<N>` (+ dated) — built but **not pushed** |
+
+Rawhide cells are marked `continue-on-error: true` because Terra / Tekk / COPR repos and Kinoite-rawhide may not exist or have F45 parity yet; rawhide failures don't fail the workflow as long as the stable cells succeed. Build args wired per cell: `BASE_IMAGE=<base_repo>:<base_tag>`, `IMAGE_NAME`, `IMAGE_REGISTRY_PATH`, `DESKTOP=mango|kde`. The Containerfile declares `ARG BASE_IMAGE` globally before any `FROM`; the other three are stage-local in the final stage.
 
 Important semantic: `:latest` tracks tip-of-main; `:stable` is deliberate (manual dispatch or a `v*` tag). `:latest` is never behind `:stable`; the two are equal momentarily right after a `:stable` cut, then `:latest` advances with subsequent merges. This matches the conventional UB/Bazzite/Bluefin meaning (`:latest` = moving newest, `:stable` = curated). An earlier iteration of this workflow had the mapping inverted; if you spot stale references in docs to "stable updates on push to main", that's a pre-2026-06-09 fingerprint and should be updated.
 

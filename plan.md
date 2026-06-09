@@ -149,6 +149,20 @@ Long-term: have the first-boot wizard offer "you have a ZSA keyboard?" and gate 
 
 **Coordination with stage1 (Jaguar):** Jaguar's PRD currently lists Flatpak + Distrobox + Homebrew as the user-level managers. If Nix proves out in stage0, propose adding it to the Jaguar plan at promotion time.
 
+## KDE opinion layer (`install_desktop_kde`)
+
+`install_desktop_kde()` in `build_files/build.sh` is currently a no-op — Kinoite already ships Plasma 6 + SDDM + xdg-desktop-portal-kde + NetworkManager, which is enough to boot a usable desktop. The Nelhua opinion layer for KDE is yet to be decided. Candidates worth shipping:
+
+- **KDE Connect** (`kdeconnect` rpm + `firewall-cmd --add-service=kdeconnect`) — phone integration is one of Plasma's flagship features
+- **Default color scheme / icon theme** — breeze-dark, papirus-icon-theme as `/etc/skel/.config/kdeglobals` defaults
+- **Default panel layout** — set via `plasma-apply-look-and-feel` or shipping a `~/.config/plasma-org.kde.plasma.desktop-appletsrc` template in `/etc/skel/`
+- **Default app set** — Plasma ships Konsole/Dolphin/Discover/System Settings by default; consider adding Okular, Spectacle, Gwenview, Ark, Kate if not already in kinoite
+- **Pin or remove apps from the application menu** — opinionated taskbar pins (Discover, Konsole, browser-picker)
+- **Disable KWallet's password prompt on first launch** — UX papercut on dogfooding
+- **First-boot wizard for KDE** — the `dialog`-based mango wizard doesn't apply; either skip first-boot UX (Plasma has its own) or write a Qt/Kirigami welcome app (PRD §10 territory)
+
+Implementation pattern follows `install_desktop_mango`: dnf install the packages, ship config defaults via `files/system/etc/skel/`, enable any required services. Most of these are 1–2 line additions individually; budget ~2 hr to pick a set and implement.
+
 ## Browser strategy refinement
 
 The image currently ships `chromium` and `helium-browser` from dnf, with Firefox removed in `remove_unwanted()`. The longer-term direction is a first-boot picker that installs a chosen browser as a Flatpak (per Jaguar's planned UX). For stage0, the dnf-installed pair is acceptable; revisit once the first-boot wizard is on `gum` and can host the picker UX.

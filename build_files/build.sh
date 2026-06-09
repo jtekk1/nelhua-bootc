@@ -3,6 +3,7 @@ set -euo pipefail
 
 IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}"
 IMAGE_REGISTRY_PATH="${IMAGE_REGISTRY_PATH:-ghcr.io/jtekk1/nelhua-mango}"
+DESKTOP="${DESKTOP:-mango}"
 OS_VERSION="$(. /etc/os-release && echo "${VERSION_ID}")"
 
 log() { printf '\n--- %s ---\n' "$*"; }
@@ -92,8 +93,8 @@ setup_plymouth() {
   # Leaving it OFF; diagnose first, re-enable if needed.
 }
 
-install_mango() {
-  log "install_mango"
+install_desktop_mango() {
+  log "install_desktop_mango"
   dnf5 -y install \
     awww blueman cliphist greetd grim iwd kanshi mako mangowm \
     pipewire playerctl shotman slurp swaybg swayidle swaylock-effects SwayOSD \
@@ -104,6 +105,16 @@ install_mango() {
 
   systemctl enable greetd.service
   systemctl enable iwd.service
+}
+
+install_desktop_kde() {
+  log "install_desktop_kde"
+  # KDE Plasma 6 + SDDM + xdg-desktop-portal-kde come from the kinoite base.
+  # Nothing to install in the parity-with-mango sense — kinoite already covers
+  # the compositor + login manager + portal that mango.yml installed for the
+  # Wayland WM. Add Nelhua-opinionated KDE niceties here as they're decided
+  # (KDE Connect, breeze-dark default, etc. — tracked in plan.md K4).
+  :
 }
 
 install_extras() {
@@ -201,7 +212,13 @@ EOF
 
 apply_os_release() {
   log "apply_os_release"
-  sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Nelhua-Linux (Mango Edition)"/' /etc/os-release
+  local pretty
+  case "$DESKTOP" in
+    mango) pretty="Nelhua-Linux (Mango Edition)" ;;
+    kde)   pretty="Nelhua-Linux (KDE)" ;;
+    *)     pretty="Nelhua-Linux" ;;
+  esac
+  sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"${pretty}\"/" /etc/os-release
 }
 
 cleanup_var_state() {
@@ -246,12 +263,21 @@ cleanup() {
   rm -rf /run/* 2>/dev/null || true
 }
 
+install_desktop() {
+  case "$DESKTOP" in
+    mango) install_desktop_mango ;;
+    kde)   install_desktop_kde ;;
+    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde)" >&2; exit 1 ;;
+  esac
+}
+
 main() {
+  log "build (desktop=${DESKTOP}, image=${IMAGE_NAME}, base=$(. /etc/os-release && echo "${PRETTY_NAME}"))"
   enable_repos
   install_base
   install_hardware
   setup_plymouth
-  install_mango
+  install_desktop      # dispatches to install_desktop_mango or install_desktop_kde
   install_extras
   install_blesh
   install_superfile

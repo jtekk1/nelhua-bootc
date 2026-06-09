@@ -1,3 +1,7 @@
+# Global ARG declared before any FROM — allows overriding the base via
+# --build-arg BASE_IMAGE=... (CI matrix builds stable vs rawhide this way).
+ARG BASE_IMAGE=quay.io/fedora/fedora-bootc:44
+
 # Build-context staging — kept off the final image via bind-mounts during RUN.
 FROM scratch AS ctx
 COPY build_files /
@@ -7,13 +11,16 @@ COPY files/dnf /repos
 FROM scratch AS sysfiles
 COPY files/system /
 
-# Base image — vanilla Fedora bootc, no upstream opinion to wrestle with.
-FROM quay.io/fedora/fedora-bootc:44
+# Base image — vanilla Fedora bootc by default; override with BASE_IMAGE
+# build-arg (e.g. quay.io/fedora/fedora-bootc:rawhide).
+FROM ${BASE_IMAGE}
 
 ARG IMAGE_NAME=nelhua-mango
 ARG IMAGE_REGISTRY_PATH=ghcr.io/jtekk1/nelhua-mango
+ARG DESKTOP=mango
 ENV IMAGE_NAME=${IMAGE_NAME}
 ENV IMAGE_REGISTRY_PATH=${IMAGE_REGISTRY_PATH}
+ENV DESKTOP=${DESKTOP}
 
 # Single RUN performs all customization. Bind-mounts give the script access to
 # /ctx (build_files + cosign.pub + repo files) and /system-files (files/system
