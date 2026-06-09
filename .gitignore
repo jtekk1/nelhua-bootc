@@ -12,6 +12,9 @@ nelhua-linux-*.iso-CHECKSUM
 # Commit message scratch file (read by `git commit -F commit.txt`)
 commit.txt
 
+# Local-only design notes / todo list
+plan.md
+
 # Editor / OS noise
 .DS_Store
 *.swp
