@@ -1,0 +1,14 @@
+[Unit]
+Description=Weekly Nix store garbage collection
+Documentation=man:nix-collect-garbage(1)
+
+[Timer]
+# Sunday 03:30 local time. Persistent=true catches up if the machine was
+# off; RandomizedDelaySec spreads load if multiple machines share a network.
+OnCalendar=Sun *-*-* 03:30:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=nix-gc.service
+
+[Install]
+WantedBy=timers.target

@@ -288,6 +288,18 @@ RUN if [ -L /opt ]; then rm /opt && mkdir -p /opt; fi
 
 Side effect: `/opt` is no longer writable at runtime (becomes part of the read-only /usr ostree commit). For Nelhua's use case (we don't expect users to manually drop binaries in /opt — they use Flatpak/Brew/Nix) that's the right trade. If a future package needs /opt to be writable post-deploy, options are (a) make that package install elsewhere via a build-time symlink swap, or (b) revert the /opt fix and find a different way to make the affected rpm install (rare).
 
+## Nix conventions (this repo)
+
+Nix is opt-in: `/nix` is pre-created in the image but the installer doesn't run until the user invokes it. The first-boot `nix-setup.service` is a no-op unless the user has actually run `nelhua-install-nix` (or the wizard surfaces it). Locked-in decisions:
+
+- **Determinate over upstream** — `nelhua-install-nix` uses the [Determinate](https://determinate.systems/) installer. Handles SELinux, ostree-aware, manages `nix-daemon` as a proper systemd unit. Determinate v3 dropped the positional `linux` planner — the planner is auto-detected. Don't re-add it.
+- **Flakes-only** — `experimental-features = nix-command flakes` enabled system-wide via the drop-in at `files/system/etc/nix/nix.conf.d/10-nelhua.conf`. **Note `extra-experimental-features`**, not `experimental-features` — Determinate sets some features already and we want to *append*, not replace. We do **not** seed any nix-channels.
+- **Trusted users** — `root @wheel`. Wheel members can pin substituters and use binary caches without re-confirming. Members of `wheel` already have sudo, so the additional trust is consistent with what they already have.
+- **No home-manager bundled by default** — keeps the base image lean. If users want it, the canonical path is `nix profile install nixpkgs#home-manager` from a flake. A future `nelhua-install-home-manager` script is reasonable if demand justifies it (track in `plan.md`).
+- **GC schedule** — `nix-gc.timer` runs weekly (`Sun *-*-* 03:30:00`, persistent, randomized ±30min) → `nix-gc.service` runs `nix-collect-garbage -d --delete-older-than 30d`. The unit is `ConditionPathExists`-guarded on the Determinate-installed `nix-collect-garbage` binary, so it's a no-op until Nix is actually installed. **Don't change retention to less than 30 days** without considering that users may build dev shells they reuse over weeks.
+
+When updating this section, also touch `plan.md`'s parked "Nix sub-questions" entry — both should agree.
+
 ## Anti-patterns (do not do these)
 
 - **Writing to `/var` at build time** — bootc resets `/var` from `/usr/share/factory/var/` on first boot. Build-time writes are lost. Put state in `/usr` or in a systemd unit that creates it at first boot.

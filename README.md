@@ -1,5 +1,10 @@
 # nelhua-bootc
 
+[![Build](https://github.com/jtekk1/nelhua-bootc/actions/workflows/build.yml/badge.svg)](https://github.com/jtekk1/nelhua-bootc/actions/workflows/build.yml)
+[![Build disk](https://github.com/jtekk1/nelhua-bootc/actions/workflows/build-disk.yml/badge.svg)](https://github.com/jtekk1/nelhua-bootc/actions/workflows/build-disk.yml)
+[![Latest release](https://img.shields.io/github/v/tag/jtekk1/nelhua-bootc?label=latest%20release&color=blue)](https://github.com/jtekk1/nelhua-bootc/tags)
+[![Renovate](https://img.shields.io/badge/Renovate-enabled-1A1F6C?logo=renovatebot&logoColor=white)](https://docs.renovatebot.com/)
+
 Personal Fedora-based [bootc](https://github.com/bootc-dev/bootc) images. One source tree builds two desktop variants (mango Wayland WM or KDE Plasma), each off a stable Fedora release or rawhide, signed with cosign, distributed via ghcr.io.
 
 ## Images shipped

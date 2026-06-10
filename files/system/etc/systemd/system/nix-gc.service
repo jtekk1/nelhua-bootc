@@ -1,0 +1,15 @@
+[Unit]
+Description=Nelhua weekly Nix store garbage collection
+Documentation=man:nix-collect-garbage(1)
+# No-op until Determinate Nix has actually been installed on the deployment.
+ConditionPathExists=/nix/var/nix/profiles/default/bin/nix-collect-garbage
+
+[Service]
+Type=oneshot
+# 30-day retention: anything older than 30 days that isn't a live root gets
+# collected. Matches typical desktop usage (catches old generations from
+# `nix profile upgrade` runs without nuking recently-built dev shells).
+ExecStart=/nix/var/nix/profiles/default/bin/nix-collect-garbage -d --delete-older-than 30d
+Nice=19
+IOSchedulingClass=idle
+IOSchedulingPriority=7
