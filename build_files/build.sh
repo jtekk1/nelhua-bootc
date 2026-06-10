@@ -248,7 +248,17 @@ EOF
 import json, pathlib
 p = pathlib.Path('/etc/containers/policy.json')
 data = json.loads(p.read_text())
-data.setdefault('transports', {}).setdefault('docker', {})['${IMAGE_REGISTRY_PATH}'] = [{
+# ostree-image-signed: refuses to operate when the policy default is
+# insecureAcceptAnything ("anything could slip through unverified;
+# refusing usage"). Flip default to reject and add a docker."" catch-all
+# back as insecureAcceptAnything so non-nelhua registry pulls behave as
+# they did before. Net effect: identical for everything except this
+# image, which is now signed-only.
+data['default'] = [{'type': 'reject'}]
+data.setdefault('transports', {}).setdefault('docker', {}).setdefault(
+    '', [{'type': 'insecureAcceptAnything'}]
+)
+data['transports']['docker']['${IMAGE_REGISTRY_PATH}'] = [{
   'type': 'sigstoreSigned',
   'keyPath': '/etc/pki/containers/${IMAGE_NAME}.pub',
   'signedIdentity': {'type': 'matchRepository'},
