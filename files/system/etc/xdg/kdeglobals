@@ -1,0 +1,28 @@
+# Nelhua KDE system-wide defaults.
+#
+# /etc/xdg/kdeglobals is read by every Plasma app at login *before* the
+# user's ~/.config/kdeglobals, so anything here becomes the out-of-the-box
+# default and gets overridden the moment the user changes it in System
+# Settings. Fedora Kinoite uses this same path to ship its defaults.
+#
+# Goal: BreezeDark out of the box, matching the look users get when they
+# pick "Breeze Dark" in System Settings → Colors. No widget-toolkit
+# inconsistency, no light desktop with dark login screen.
+
+[General]
+ColorScheme=BreezeDark
+# Lavender / violet (#B875DC). Tinted UI accents (selected items, focus
+# ring, switches, etc.). Stored as comma-separated RGB; Plasma 6 reads
+# this from [General], not from the color-scheme file.
+AccentColor=184,117,220
+LastUsedCustomAccentColor=184,117,220
+
+[Icons]
+# candy-icons is GPL-3.0, FollowsColorScheme=true (no separate -dark
+# variant needed). Installed by build.sh install_icon_themes() at
+# /usr/share/icons/candy-icons.
+Theme=candy-icons
+
+[KDE]
+LookAndFeelPackage=org.nelhua.linux.default
+SingleClick=false

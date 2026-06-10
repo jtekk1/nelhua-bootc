@@ -187,6 +187,25 @@ install_extras() {
     qemu-device-display-virtio-gpu
 }
 
+install_icon_themes() {
+  log "install_icon_themes"
+  # candy-icons (EliverLara, GPL-3.0). FollowsColorScheme=true so the set
+  # auto-tracks BreezeDark vs BreezeLight without a separate dark variant —
+  # one install covers light/dark users. Pinned to a SHA so Renovate (or a
+  # manual bump) has a single source of truth and reproducibility holds.
+  # renovate: datasource=git-refs depName=EliverLara/candy-icons branch=master
+  local sha="83512fbcadcb7e1015ebbe1729a1894946b021be"
+  local tmp
+  tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/candy.tar.gz" \
+    "https://github.com/EliverLara/candy-icons/archive/${sha}.tar.gz"
+  tar -xzf "${tmp}/candy.tar.gz" -C "${tmp}"
+  install -d /usr/share/icons
+  mv "${tmp}/candy-icons-${sha}" /usr/share/icons/candy-icons
+  rm -rf "${tmp}"
+  gtk-update-icon-cache -f /usr/share/icons/candy-icons 2>/dev/null || true
+}
+
 install_superfile() {
   log "install_superfile"
   if [[ -x /usr/bin/spf ]]; then
@@ -340,6 +359,7 @@ main() {
   setup_plymouth
   install_desktop      # dispatches to install_desktop_mango or install_desktop_kde
   install_extras
+  install_icon_themes
   install_superfile
   apply_files          # ship system tree (including brew-setup + nix-setup units)
   enable_first_boot_services

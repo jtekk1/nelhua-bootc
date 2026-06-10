@@ -1,17 +1,9 @@
-[kwinrc][Plugins]
-# Pleasant defaults; can be overridden per-user.
-blurEnabled=true
-contrastEnabled=true
+# Applied to the user's KConfig when they (re-)select the Nelhua global
+# theme. Paired with /etc/xdg/kdeglobals which sets BreezeDark as the
+# system-wide default before any per-user state exists.
 
-[kwinrc][Compositing]
-OpenGLIsUnsafe=false
-WindowsBlockCompositing=false
-
-[ksplashrc][KSplash]
-Theme=org.nelhua.linux.default
-
-[plasmarc][Theme]
-name=default
+[Wallpaper]
+Image=Nelhua
 
 [kdeglobals][KDE]
 LookAndFeelPackage=org.nelhua.linux.default
@@ -19,6 +11,31 @@ SingleClick=false
 
 [kdeglobals][General]
 ColorScheme=BreezeDark
+AccentColor=184,117,220
+LastUsedCustomAccentColor=184,117,220
 
-# When assets (logo, palette, splash QML) are dropped in later, this defaults
-# file is the right place to wire them into Plasma's KConfig surface.
+[kdeglobals][Icons]
+Theme=candy-icons
+
+[kwinrc][org.kde.kdecoration2]
+theme=Breeze
+library=org.kde.breeze
+
+[kwinrc][Plugins]
+blurEnabled=true
+contrastEnabled=true
+
+[kwinrc][Compositing]
+OpenGLIsUnsafe=false
+WindowsBlockCompositing=false
+
+[plasmarc][Theme]
+name=default
+
+[ksplashrc][KSplash]
+Theme=org.nelhua.linux.default
+
+# When asset directories (contents/splash/, contents/loginmanager/,
+# contents/lockscreen/, contents/wallpapers/) are populated, those are the
+# pieces that make the theme visually distinct from Breeze. This defaults
+# file controls the KConfig knobs; the QML/assets control the look.
