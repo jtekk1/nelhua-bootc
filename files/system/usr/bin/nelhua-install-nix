@@ -28,7 +28,10 @@ fi
 # Determinate's installer self-escalates via sudo, so callable from either
 # root (systemd oneshot) or user (manual reinstall) context.
 echo "Installing Determinate Nix..."
+# Determinate v3 dropped the positional `linux` planner — the planner is now
+# auto-detected. Passing `linux` makes the installer try to read a saved-plan
+# JSON file at that path and bail with "Reading plan: No such file".
 curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
-  | sh -s -- install --determinate --no-confirm linux
+  | sh -s -- install --determinate --no-confirm
 
 echo "Nix installed. Open a new shell or 'source /etc/profile.d/nix.sh' to pick up nix in PATH."
