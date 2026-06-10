@@ -57,6 +57,10 @@ enable_repos() {
   curl -fsSL -o /etc/yum.repos.d/tailscale.repo \
     https://pkgs.tailscale.com/stable/fedora/tailscale.repo
 
+  log "  -> Charm repo (gum, glow, vhs, soft-serve)"
+  rpm --import https://repo.charm.sh/yum/gpg.key
+  install -Dm0644 /ctx/repos/charm.repo /etc/yum.repos.d/charm.repo
+
   log "  -> Tekk forgejo repo"
   # forgejo.jtekk.dev has bot protection that 403s default `curl/*` UAs from
   # datacenter IPs (GH runners). Package-manager UAs are typically allow-listed.
@@ -93,7 +97,7 @@ install_base() {
     atuin bat bitwarden-cli eza fd fzf jq lsof plocate ripgrep rsync wget yazi zip zoxide
 
   dnf_install \
-    bluetui btop dialog dust fastfetch gdu glow impala lazygit luarocks ncdu neovim tldr wiremix
+    bluetui btop dust fastfetch gdu glow gum impala lazygit luarocks ncdu neovim tldr wiremix
 
   dnf_install satty swappy
 
@@ -118,11 +122,9 @@ install_hardware() {
     mesa-dri-drivers mesa-vulkan-drivers vulkan-loader \
     amd-gpu-firmware amd-ucode-firmware lact \
     intel-media-driver mesa-va-drivers
-
-  # plugdev group used by 50-zsa.rules (ZSA Moonlander/Voyager flashing).
-  # Fedora doesn't ship this group by default; create it as a system group.
-  # Users still need to be added to plugdev at deploy time.
-  groupadd -r plugdev 2>/dev/null || true
+  # ZSA Moonlander/Voyager device access: 50-zsa.rules uses TAG+="uaccess",
+  # so the active session user gets device access via systemd-logind. No
+  # plugdev group / no per-user usermod step.
 }
 
 setup_plymouth() {
@@ -221,6 +223,9 @@ enable_first_boot_services() {
   # Shipped (but not enabled) by the upstream bootc package; we enable here.
   # Matches the ublue pattern (Bluefin/Bazzite/Aurora ship this enabled).
   systemctl enable bootc-fetch-apply-updates.timer
+  # Weekly Nix store GC. Guarded by ConditionPathExists on the nix daemon
+  # binary; no-op until Determinate Nix has actually been installed.
+  systemctl enable nix-gc.timer
 }
 
 remove_unwanted() {
