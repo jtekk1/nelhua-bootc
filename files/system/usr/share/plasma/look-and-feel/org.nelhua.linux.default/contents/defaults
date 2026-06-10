@@ -1,0 +1,24 @@
+[kwinrc][Plugins]
+# Pleasant defaults; can be overridden per-user.
+blurEnabled=true
+contrastEnabled=true
+
+[kwinrc][Compositing]
+OpenGLIsUnsafe=false
+WindowsBlockCompositing=false
+
+[ksplashrc][KSplash]
+Theme=org.nelhua.linux.default
+
+[plasmarc][Theme]
+name=default
+
+[kdeglobals][KDE]
+LookAndFeelPackage=org.nelhua.linux.default
+SingleClick=false
+
+[kdeglobals][General]
+ColorScheme=BreezeDark
+
+# When assets (logo, palette, splash QML) are dropped in later, this defaults
+# file is the right place to wire them into Plasma's KConfig surface.

@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "jtekk@jtekk.dev",
+                "Name": "jtekk"
+            }
+        ],
+        "Category": "Plasma Look And Feel",
+        "Description": "Nelhua Linux default Plasma global theme",
+        "Id": "org.nelhua.linux.default",
+        "License": "GPL-3.0+",
+        "Name": "Nelhua",
+        "Version": "0.1"
+    }
+}

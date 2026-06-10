@@ -155,11 +155,15 @@ install_desktop_mango() {
 
 install_desktop_kde() {
   log "install_desktop_kde"
-  # KDE Plasma 6 + SDDM + xdg-desktop-portal-kde come from the kinoite base.
+  # KDE Plasma 6 + plasma-login-manager + xdg-desktop-portal-kde come from the
+  # kinoite base. (Fedora Kinoite F44 ships plasma-login-manager, the new
+  # Wayland-native KDE login screen — NOT SDDM. Theming model is different:
+  # see files/system/usr/share/plasma/look-and-feel/org.nelhua.linux.default/
+  # and files/system/etc/plasmalogin.conf.d/10-nelhua.conf.)
+  #
   # Nothing to install in the parity-with-mango sense — kinoite already covers
-  # the compositor + login manager + portal that mango.yml installed for the
-  # Wayland WM. Add Nelhua-opinionated KDE niceties here as they're decided
-  # (KDE Connect, breeze-dark default, etc. — tracked in plan.md K4).
+  # the compositor + login manager + portal. Add Nelhua-opinionated KDE
+  # niceties here as they're decided.
   :
 }
 
