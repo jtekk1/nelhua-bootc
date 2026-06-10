@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# nelhua-update — unified updater for the deployed Nelhua bootc image.
+#
+# Runs in this order:
+#   1. bootc upgrade  (with rpm-ostree fallback when layered packages exist)
+#   2. flatpak update
+#   3. homebrew upgrade   (if installed)
+#   4. nix profile upgrade (if installed)
+#
+# Idempotent: each step is a no-op when its tool / state is already current.
+#
+# Building block for the future first-boot wizard ("Check for updates") and
+# user-friendly daily updates. Pairs with bootc-fetch-apply-updates.timer
+# which handles the OS image fetch in the background; this command applies
+# everything on demand in one shot.
+
+set -euo pipefail
+
+log() { printf '\n=== %s ===\n' "$*"; }
+
+upgrade_bootc() {
+  log "bootc upgrade"
+  # `bootc upgrade` refuses to run when the deployment has layered rpm-ostree
+  # packages ("Deployment contains local rpm-ostree modifications; cannot
+  # upgrade via bootc"). When that happens we fall back to `rpm-ostree upgrade`,
+  # which dispatches to bootc when no modifications exist and stays in
+  # rpm-ostree-land when they do.
+  local err
+  err="$(mktemp)"
+  trap 'rm -f "$err"' RETURN
+
+  if sudo bootc upgrade --quiet 2>"$err"; then
+    return 0
+  fi
+
+  if grep -q 'local rpm-ostree modifications' "$err"; then
+    echo "Deployment has rpm-ostree layered packages; using rpm-ostree upgrade." >&2
+    sudo rpm-ostree upgrade
+    return 0
+  fi
+
+  cat "$err" >&2
+  return 1
+}
+
+upgrade_flatpak() {
+  if ! command -v flatpak >/dev/null 2>&1; then
+    return 0
+  fi
+  log "flatpak update"
+  flatpak update -y
+}
+
+upgrade_brew() {
+  local brew=/home/linuxbrew/.linuxbrew/bin/brew
+  if [[ ! -x "$brew" ]]; then
+    return 0
+  fi
+  log "homebrew upgrade"
+  "$brew" update
+  "$brew" upgrade
+}
+
+upgrade_nix() {
+  local nix=/nix/var/nix/profiles/default/bin/nix
+  if [[ ! -x "$nix" ]]; then
+    return 0
+  fi
+  log "nix profile upgrade"
+  # `nix profile upgrade --all` updates everything in the user's profile.
+  # Older Nix versions used the regex form `nix profile upgrade '.*'`.
+  if "$nix" profile upgrade --help 2>&1 | grep -q -- '--all'; then
+    "$nix" profile upgrade --all
+  else
+    "$nix" profile upgrade '.*'
+  fi
+}
+
+main() {
+  upgrade_bootc
+  upgrade_flatpak
+  upgrade_brew
+  upgrade_nix
+  log "all updaters finished. Reboot when ready to activate the new OS image."
+}
+
+main "$@"

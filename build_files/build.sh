@@ -212,11 +212,15 @@ apply_files() {
 
 enable_first_boot_services() {
   log "enable_first_boot_services"
-  # Both are oneshot units guarded by ConditionPathExists so they run exactly
-  # once per fresh deployment. Units live in files/system/etc/systemd/system/
-  # and were just rsync'd in by apply_files.
+  # Both setup units are oneshot, guarded by ConditionPathExists so they run
+  # exactly once per fresh deployment. Units live in
+  # files/system/etc/systemd/system/ and were just rsync'd in by apply_files.
   systemctl enable brew-setup.service
   systemctl enable nix-setup.service
+  # Auto-update: daily fetch, stage on disk, user reboots when ready.
+  # Shipped (but not enabled) by the upstream bootc package; we enable here.
+  # Matches the ublue pattern (Bluefin/Bazzite/Aurora ship this enabled).
+  systemctl enable bootc-fetch-apply-updates.timer
 }
 
 remove_unwanted() {

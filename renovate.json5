@@ -1,0 +1,37 @@
+{
+  // Tracks Containerfile FROM digests and GitHub Actions SHAs.
+  // Replaces .github/dependabot.yml (which only covered github-actions).
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Sensible defaults: PR rate limit, scheduled grouping, semantic commits,
+  // separate-major-minor for breaking changes, etc.
+  "extends": [
+    "config:best-practices",
+  ],
+
+  // Don't auto-rebase PRs when they conflict — leave that decision to us.
+  "rebaseWhen": "never",
+
+  "packageRules": [
+    // Auto-merge any PR that just pins a moving tag to an immutable digest.
+    // No semver bump, no behavior change — purely a reproducibility win.
+    {
+      "automerge": true,
+      "matchUpdateTypes": ["pin", "pinDigest"],
+    },
+
+    // Hold Fedora bootc / Kinoite base images at the current major until the
+    // next Fedora release actually ships. Bump the matchCurrentValue when
+    // ready to move (e.g. "44" -> "45" once F45 stable releases). Rawhide
+    // entries are unaffected because their tag is "rawhide", not "44".
+    {
+      "matchPackageNames": [
+        "quay.io/fedora/fedora-bootc",
+        "quay.io/fedora/fedora-kinoite",
+      ],
+      "matchCurrentValue": "44",
+      "enabled": false,
+    },
+  ],
+}
+
