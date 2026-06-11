@@ -22,7 +22,11 @@ theme=Breeze
 library=org.kde.breeze
 
 [kwinrc][Plugins]
-blurEnabled=true
+# Glass (kwin-effects-glass) replaces stock blur. See /etc/xdg/kwinrc
+# for the rationale; this block reapplies that pairing when the user
+# (re-)selects the Nelhua global theme in System Settings.
+glassEnabled=true
+blurEnabled=false
 contrastEnabled=true
 
 [kwinrc][Compositing]

@@ -85,6 +85,18 @@ enable_repos() {
   log "  -> COPRs"
   dnf5 -y copr enable atim/starship
   dnf5 -y copr enable ilyaz/LACT
+  # kwin-effects-glass: maintained by AMA147000 (not the upstream dev). The
+  # COPR project's available chroots are F42/F43/F44 only — no
+  # fedora-rawhide-x86_64. `dnf5 copr enable` errors out hard
+  # ("Chroot not found in the given Copr project") if we try on rawhide,
+  # so skip there. install_desktop_kde() uses dnf_install which respects
+  # --skip-unavailable on rawhide, so the missing package no-ops cleanly.
+  # Mirrors the Terra/Tekk SKIP-on-rawhide pattern above.
+  if (( IS_RAWHIDE )); then
+    log "  -> COPR ama1470/kwin-effects-glass: SKIPPED on rawhide (no F45 chroot yet)"
+  else
+    dnf5 -y copr enable ama1470/kwin-effects-glass
+  fi
 }
 
 install_base() {
@@ -171,7 +183,15 @@ install_desktop_kde() {
   # Nothing to install in the parity-with-mango sense — kinoite already covers
   # the compositor + login manager + portal. Add Nelhua-opinionated KDE
   # niceties here as they're decided.
-  :
+
+  # kwin-effects-glass: fork of Plasma 6 blur with force-blur + refraction.
+  # Plugin lib installs as `glass.so` → enabled via [Plugins]glassEnabled=true
+  # in /etc/xdg/kwinrc (shipped at files/system/etc/xdg/kwinrc). Glass
+  # supersedes stock blur (it IS forked from blur), so we also set
+  # blurEnabled=false there to avoid double-render.
+  # F44 ships Plasma 6.6.5 — within the upstream-supported window (6.6 +
+  # Wayland-only; Kinoite defaults to Wayland so this isn't a constraint).
+  dnf_install kwin-effects-glass
 }
 
 install_extras() {
@@ -346,6 +366,7 @@ cleanup() {
   log "cleanup"
   dnf5 -y copr disable atim/starship || true
   dnf5 -y copr disable ilyaz/LACT || true
+  dnf5 -y copr disable ama1470/kwin-effects-glass || true
   dnf5 clean all
   # Comprehensive scrub: build-time state in /var that won't survive the
   # first-boot reset, plus runtime-only paths that bootc lint flags
