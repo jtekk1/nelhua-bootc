@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "jtekk@jtekk.dev",
+                "Name": "jtekk"
+            }
+        ],
+        "Id": "Nelhua",
+        "Name": "Nelhua",
+        "License": "CC-BY-SA-4.0"
+    }
+}

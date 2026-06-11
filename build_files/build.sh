@@ -155,11 +155,15 @@ install_desktop_mango() {
 
 install_desktop_kde() {
   log "install_desktop_kde"
-  # KDE Plasma 6 + SDDM + xdg-desktop-portal-kde come from the kinoite base.
+  # KDE Plasma 6 + plasma-login-manager + xdg-desktop-portal-kde come from the
+  # kinoite base. (Fedora Kinoite F44 ships plasma-login-manager, the new
+  # Wayland-native KDE login screen — NOT SDDM. Theming model is different:
+  # see files/system/usr/share/plasma/look-and-feel/org.nelhua.linux.default/
+  # and files/system/etc/plasmalogin.conf.d/10-nelhua.conf.)
+  #
   # Nothing to install in the parity-with-mango sense — kinoite already covers
-  # the compositor + login manager + portal that mango.yml installed for the
-  # Wayland WM. Add Nelhua-opinionated KDE niceties here as they're decided
-  # (KDE Connect, breeze-dark default, etc. — tracked in plan.md K4).
+  # the compositor + login manager + portal. Add Nelhua-opinionated KDE
+  # niceties here as they're decided.
   :
 }
 
@@ -183,19 +187,42 @@ install_extras() {
     qemu-device-display-virtio-gpu
 }
 
+install_icon_themes() {
+  log "install_icon_themes"
+  # candy-icons (EliverLara, GPL-3.0). FollowsColorScheme=true so the set
+  # auto-tracks BreezeDark vs BreezeLight without a separate dark variant —
+  # one install covers light/dark users. Pinned to a SHA so Renovate (or a
+  # manual bump) has a single source of truth and reproducibility holds.
+  # renovate: datasource=git-refs depName=EliverLara/candy-icons branch=master
+  local sha="83512fbcadcb7e1015ebbe1729a1894946b021be"
+  local tmp
+  tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/candy.tar.gz" \
+    "https://github.com/EliverLara/candy-icons/archive/${sha}.tar.gz"
+  tar -xzf "${tmp}/candy.tar.gz" -C "${tmp}"
+  install -d /usr/share/icons
+  mv "${tmp}/candy-icons-${sha}" /usr/share/icons/candy-icons
+  rm -rf "${tmp}"
+  gtk-update-icon-cache -f /usr/share/icons/candy-icons 2>/dev/null || true
+}
+
 install_superfile() {
   log "install_superfile"
   if [[ -x /usr/bin/spf ]]; then
     return 0
   fi
-  local arch tag tmp archive binary
+  local arch tmp archive binary
+  # Pinned to avoid the unauthenticated api.github.com/repos/.../releases/latest
+  # call we used to make here — that endpoint is rate-limited to 60/hr per IP
+  # and CI runners share egress pools, so a bad neighbor's traffic would 403
+  # this step. Renovate keeps the pin fresh.
+  # renovate: datasource=github-releases depName=yorukot/superfile
+  local tag="v1.6.0"
   case "$(uname -m)" in
     x86_64)  arch=amd64 ;;
     aarch64) arch=arm64 ;;
     *) echo "Unsupported arch: $(uname -m)" >&2; return 1 ;;
   esac
-  tag="$(curl -fsSL https://api.github.com/repos/yorukot/superfile/releases/latest \
-    | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
   tmp="$(mktemp -d)"
   archive="superfile-linux-${tag}-${arch}.tar.gz"
   curl -fsSL "https://github.com/yorukot/superfile/releases/download/${tag}/${archive}" \
@@ -248,7 +275,17 @@ EOF
 import json, pathlib
 p = pathlib.Path('/etc/containers/policy.json')
 data = json.loads(p.read_text())
-data.setdefault('transports', {}).setdefault('docker', {})['${IMAGE_REGISTRY_PATH}'] = [{
+# ostree-image-signed: refuses to operate when the policy default is
+# insecureAcceptAnything ("anything could slip through unverified;
+# refusing usage"). Flip default to reject and add a docker."" catch-all
+# back as insecureAcceptAnything so non-nelhua registry pulls behave as
+# they did before. Net effect: identical for everything except this
+# image, which is now signed-only.
+data['default'] = [{'type': 'reject'}]
+data.setdefault('transports', {}).setdefault('docker', {}).setdefault(
+    '', [{'type': 'insecureAcceptAnything'}]
+)
+data['transports']['docker']['${IMAGE_REGISTRY_PATH}'] = [{
   'type': 'sigstoreSigned',
   'keyPath': '/etc/pki/containers/${IMAGE_NAME}.pub',
   'signedIdentity': {'type': 'matchRepository'},
@@ -326,6 +363,7 @@ main() {
   setup_plymouth
   install_desktop      # dispatches to install_desktop_mango or install_desktop_kde
   install_extras
+  install_icon_themes
   install_superfile
   apply_files          # ship system tree (including brew-setup + nix-setup units)
   enable_first_boot_services
