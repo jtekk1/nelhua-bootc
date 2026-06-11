@@ -211,14 +211,18 @@ install_superfile() {
   if [[ -x /usr/bin/spf ]]; then
     return 0
   fi
-  local arch tag tmp archive binary
+  local arch tmp archive binary
+  # Pinned to avoid the unauthenticated api.github.com/repos/.../releases/latest
+  # call we used to make here — that endpoint is rate-limited to 60/hr per IP
+  # and CI runners share egress pools, so a bad neighbor's traffic would 403
+  # this step. Renovate keeps the pin fresh.
+  # renovate: datasource=github-releases depName=yorukot/superfile
+  local tag="v1.6.0"
   case "$(uname -m)" in
     x86_64)  arch=amd64 ;;
     aarch64) arch=arm64 ;;
     *) echo "Unsupported arch: $(uname -m)" >&2; return 1 ;;
   esac
-  tag="$(curl -fsSL https://api.github.com/repos/yorukot/superfile/releases/latest \
-    | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
   tmp="$(mktemp -d)"
   archive="superfile-linux-${tag}-${arch}.tar.gz"
   curl -fsSL "https://github.com/yorukot/superfile/releases/download/${tag}/${archive}" \
