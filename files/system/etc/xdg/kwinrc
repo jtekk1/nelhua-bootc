@@ -1,0 +1,22 @@
+# Nelhua KWin system-wide defaults.
+#
+# /etc/xdg/kwinrc is read by KWin at startup *before* the user's
+# ~/.config/kwinrc, so anything here is the out-of-the-box default and
+# gets overridden the moment the user changes it in System Settings.
+# Same pattern Fedora Kinoite uses for its kwin defaults.
+#
+# Mango doesn't use kwin — this file is harmless on mango builds since
+# kwin never reads it.
+
+[Plugins]
+# Glass replaces stock blur. Both are blur-effect implementations; running
+# both at once means blur->glass double-render with visible quality loss.
+# The kwin-effects-glass package is installed only on KDE builds (see
+# install_desktop_kde() in build.sh), so on mango both lines are no-ops.
+glassEnabled=true
+blurEnabled=false
+
+# Keep stock contrast on — Glass handles refraction/blur but contrast
+# (color-level adjustments behind translucent regions) is a separate
+# upstream effect.
+contrastEnabled=true
