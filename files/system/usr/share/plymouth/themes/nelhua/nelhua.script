@@ -1,0 +1,48 @@
+# Nelhua Plymouth boot splash.
+#
+# Picked the `script` module (not `two-step` / `bgrt`) because we want a
+# custom logo with breathing-pulse animation, not the firmware logo or a
+# rotating throbber. Script gives us per-frame opacity control with
+# ~30 lines instead of an animation sprite sheet.
+#
+# Layout: solid background matching the logo's near-black, brand mark
+# centered, password prompt overlays when LUKS asks.
+
+# Background. #0d0d0d matches the splash QML so the plymouth->splash
+# transition doesn't flash a different black.
+Window.SetBackgroundTopColor(0.051, 0.051, 0.051);
+Window.SetBackgroundBottomColor(0.051, 0.051, 0.051);
+
+# Brand mark: full asset (jaguar head + NELHUA LINUX wordmark).
+# 704x854 source. Centered on screen at native resolution; plymouth
+# renders before the desktop scales anything.
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(Window.GetWidth()  / 2 - logo.image.GetWidth()  / 2);
+logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);
+logo.sprite.SetZ(1);
+
+# Breathing pulse. Opacity oscillates between 0.65 and 1.0.
+# Step 0.04 rad/frame * ~60 fps = ~2.4 rad/sec → ~2.6s period.
+# Slow enough to read as "alive" not "strobing".
+pulse_angle = 0;
+fun refresh_callback() {
+    pulse_angle = pulse_angle + 0.04;
+    logo.sprite.SetOpacity(0.825 + 0.175 * Math.Sin(pulse_angle));
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# LUKS / disk-encryption password prompt. When plymouth needs the user
+# to type, dim the logo so the prompt text plymouth draws on top is
+# legible. Don't try to render the prompt ourselves — let plymouth's
+# built-in fallback handle it. Re-brighten when prompt clears.
+fun display_password_callback(prompt, bullets) {
+    logo.sprite.SetOpacity(0.25);
+}
+
+fun display_normal_callback() {
+    logo.sprite.SetOpacity(1.0);
+}
+
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+Plymouth.SetDisplayNormalFunction(display_normal_callback);

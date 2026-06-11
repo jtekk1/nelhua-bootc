@@ -129,8 +129,15 @@ install_hardware() {
 
 setup_plymouth() {
   log "setup_plymouth"
-  dnf_install plymouth plymouth-theme-solar
-  plymouth-set-default-theme solar || true
+  # The `nelhua` theme is bundled at files/system/usr/share/plymouth/themes/
+  # nelhua/, so this MUST run after apply_files() — until then the theme dir
+  # isn't on disk and plymouth-set-default-theme has nothing to point at.
+  # See main() ordering for the move-after.
+  #
+  # Dropped `plymouth-theme-solar` install — we ship our own and the upstream
+  # theme would be dead weight.
+  dnf_install plymouth
+  plymouth-set-default-theme nelhua || true
   # BlueBuild called `dracut -f --regenerate-all` here. In bootc, initramfs is
   # built by bootc-image-builder (or the deployed system), not the container.
   # plan.md flags theme-not-sticking as an open issue and suspected this call.
@@ -360,12 +367,12 @@ main() {
   enable_repos
   install_base
   install_hardware
-  setup_plymouth
   install_desktop      # dispatches to install_desktop_mango or install_desktop_kde
   install_extras
   install_icon_themes
   install_superfile
   apply_files          # ship system tree (including brew-setup + nix-setup units)
+  setup_plymouth       # MUST be after apply_files — needs /usr/share/plymouth/themes/nelhua on disk
   enable_first_boot_services
   remove_unwanted
   apply_signing

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Nelhua
+Description=Nelhua Linux boot splash — jaguar mark with breathing pulse
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/nelhua
+ScriptFile=/usr/share/plymouth/themes/nelhua/nelhua.script
