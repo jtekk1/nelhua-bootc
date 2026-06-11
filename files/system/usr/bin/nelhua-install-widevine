@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# nelhua-install-widevine — install Google Widevine CDM for Helium browser
+#
+# Usage:
+#   nelhua-install-widevine            # install CDM for current user
+#   nelhua-install-widevine --force    # reinstall even if CDM already present
+#
+# Downloads Google Chrome stable's RPM, extracts only WidevineCdm/, copies
+# it into ~/.config/net.imput.helium/WidevineCdm/<version>/ where Helium
+# looks. Helium has the EME/CDM loader compiled in but disables the
+# component-updater that would auto-fetch the CDM — this script fills in
+# the manual step.
+#
+# Why not bake the CDM into the Nelhua image:
+#   libwidevinecdm.so is proprietary Google software under Google's CDM
+#   Terms of Service (see LICENSE inside the install dir post-extraction).
+#   The EULA forbids "modify, sell, or otherwise distribute". Per-user
+#   opt-in install puts the user in the distribution chain, not Nelhua.
+#
+# Idempotent: exits 0 if any CDM version is already installed. Use --force
+# to wipe and reinstall (useful when Helium logs "Widevine CDM out of
+# date" after Google publishes a new build).
+
+set -euo pipefail
+
+CHROME_URL="https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm"
+CDM_BASE="${HOME}/.config/net.imput.helium/WidevineCdm"
+
+usage() {
+  sed -n '/^# nelhua-install-widevine/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+FORCE=0
+for arg in "$@"; do
+  case "$arg" in
+    --force)   FORCE=1 ;;
+    -h|--help) usage 0 ;;
+    *) echo "Unknown arg: $arg" >&2; usage 2 ;;
+  esac
+done
+
+if [[ $EUID -eq 0 ]]; then
+  echo "nelhua-install-widevine: refusing to run as root." >&2
+  echo "  Widevine CDM is per-user. Re-run as your normal user." >&2
+  exit 1
+fi
+
+if [[ "$(uname -m)" != "x86_64" ]]; then
+  echo "Unsupported arch: $(uname -m). Only x86_64 is supported." >&2
+  echo "(aarch64 path is different — see https://github.com/AsahiLinux/widevine-installer)" >&2
+  exit 1
+fi
+
+# Idempotency: any CDM under CDM_BASE counts as "already installed".
+existing="$(find "$CDM_BASE" -name libwidevinecdm.so -type f 2>/dev/null | head -1 || true)"
+if [[ -n "$existing" && "$FORCE" -eq 0 ]]; then
+  # Path shape: <CDM_BASE>/<version>/_platform_specific/linux_x64/libwidevinecdm.so
+  ver="$(basename "$(dirname "$(dirname "$(dirname "$existing")")")")"
+  echo "Widevine CDM ${ver} already installed at ${CDM_BASE}/${ver}."
+  echo "Use --force to refresh from Chrome stable."
+  exit 0
+fi
+
+tmp="$(mktemp -d -t nelhua-widevine.XXXXXX)"
+trap 'rm -rf "$tmp"' EXIT
+
+echo "Downloading Google Chrome stable RPM for CDM extraction (~120MB)..."
+curl --proto '=https' --tlsv1.2 -fSL --progress-bar -o "$tmp/chrome.rpm" "$CHROME_URL"
+
+echo "Extracting WidevineCdm/ from RPM..."
+# cpio pattern must match archive paths (with leading ./), and the pattern
+# must be quoted so the shell doesn't glob it against the cwd.
+( cd "$tmp" \
+  && rpm2cpio chrome.rpm \
+     | cpio --quiet -id './opt/google/chrome/WidevineCdm/*' )
+
+CDM_SRC="$tmp/opt/google/chrome/WidevineCdm"
+if [[ ! -f "$CDM_SRC/manifest.json" ]]; then
+  echo "Extraction failed: no manifest.json found at $CDM_SRC" >&2
+  echo "Google may have changed the RPM layout — file an issue if this persists." >&2
+  exit 1
+fi
+
+# Parse version from manifest. python3 is in fedora-bootc base.
+VER="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' \
+  "$CDM_SRC/manifest.json")"
+[[ -n "$VER" ]] || { echo "Could not parse CDM version from manifest.json" >&2; exit 1; }
+
+echo "CDM version: ${VER}"
+
+mkdir -p "$CDM_BASE"
+
+# --force semantics: wipe ALL existing version dirs so the new install is
+# the only one Helium sees. Without --force we already exited above.
+if [[ "$FORCE" -eq 1 ]]; then
+  find "$CDM_BASE" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+fi
+
+DEST="$CDM_BASE/$VER"
+mkdir -p "$DEST"
+cp -r "$CDM_SRC/." "$DEST/"
+
+echo
+echo "Installed Widevine CDM ${VER} to ${DEST}"
+echo
+echo "Next steps:"
+echo "  1. FULLY kill Helium — closing the window is not enough. Helium"
+echo "     keeps background processes (zygote, GPU helper, extension hosts)"
+echo "     running after the window closes; a new launch attaches to them"
+echo "     and keeps the OLD CDM state. The result looks like 'EME not"
+echo "     supported' even though the CDM is on disk."
+echo "         pkill -f /opt/helium/helium"
+echo "  2. Relaunch Helium."
+echo "  3. Confirm at helium://components/ — Widevine should list ${VER}."
+echo "  4. End-to-end test: https://open.spotify.com (refuses to play without"
+echo "     Widevine), or any YouTube / Netflix / Disney+ stream."
+echo "     (Bitmovin's https://bitmovin.com/demos/drm test page reports"
+echo "     EME support correctly but its playback demo needs their own"
+echo "     player key, so 'License request failed' there is unrelated to"
+echo "     your CDM.)"
