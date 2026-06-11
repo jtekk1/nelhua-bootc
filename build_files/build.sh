@@ -85,11 +85,18 @@ enable_repos() {
   log "  -> COPRs"
   dnf5 -y copr enable atim/starship
   dnf5 -y copr enable ilyaz/LACT
-  # kwin-effects-glass: maintained by AMA147000 (not the upstream dev). F44
-  # builds confirmed at https://copr.fedorainfracloud.org/coprs/ama1470/
-  # kwin-effects-glass/. Only consumed by install_desktop_kde() — harmless
-  # to enable on mango builds since the package never gets requested there.
-  dnf5 -y copr enable ama1470/kwin-effects-glass
+  # kwin-effects-glass: maintained by AMA147000 (not the upstream dev). The
+  # COPR project's available chroots are F42/F43/F44 only — no
+  # fedora-rawhide-x86_64. `dnf5 copr enable` errors out hard
+  # ("Chroot not found in the given Copr project") if we try on rawhide,
+  # so skip there. install_desktop_kde() uses dnf_install which respects
+  # --skip-unavailable on rawhide, so the missing package no-ops cleanly.
+  # Mirrors the Terra/Tekk SKIP-on-rawhide pattern above.
+  if (( IS_RAWHIDE )); then
+    log "  -> COPR ama1470/kwin-effects-glass: SKIPPED on rawhide (no F45 chroot yet)"
+  else
+    dnf5 -y copr enable ama1470/kwin-effects-glass
+  fi
 }
 
 install_base() {
