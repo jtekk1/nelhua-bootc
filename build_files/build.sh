@@ -197,7 +197,13 @@ install_desktop_kde() {
 install_extras() {
   log "install_extras"
   # gaming
-  dnf_install gamescope mangohud protontricks
+  # steam-devices: udev rules for Steam Controller, Steam Deck controllers,
+  # DualShock/DualSense, Xbox One/Series controllers. Required for the
+  # flatpak Steam (com.valvesoftware.Steam) we offer in nelhua-install-
+  # flatpaks — flatpak sandbox can't write to /usr/lib/udev/rules.d/ so
+  # the package ships them in the host image. Steam flatpak shows
+  # "Missing permissions for input devices" without this.
+  dnf_install gamescope mangohud protontricks steam-devices
   # dev
   dnf_install direnv make
   # virt — tools to boot/build VMs from this OS (./run-vm.sh, dogfooding bootc images).

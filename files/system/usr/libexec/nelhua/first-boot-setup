@@ -9,8 +9,7 @@ set -u
 PRESET_ROOT="/usr/share/nelhua/presets/default"
 WALLPAPER_DIR="/usr/share/backgrounds/nelhua"
 DEFAULT_WALLPAPER="${WALLPAPER_DIR}/Nelhua-01.jpeg"
-FLATPAK_LIST_FILE="/usr/share/nelhua/flatpaks.list"
-FLATHUB_REPO_URL="https://dl.flathub.org/repo/flathub.flatpakrepo"
+# Flatpak list path + flathub URL now owned by /usr/bin/nelhua-install-flatpaks.
 STATE_DIR="${HOME}/.config/nelhua"
 MARKER="${STATE_DIR}/.setup-done"
 
@@ -78,55 +77,20 @@ fi
 
 title "System Flatpaks"
 
-declare -a IDS=() LABELS=()
-if [[ -r "${FLATPAK_LIST_FILE}" ]]; then
-  while IFS='|' read -r id label; do
-    [[ -z "${id}" || "${id}" =~ ^[[:space:]]*# ]] && continue
-    IDS+=("${id}")
-    LABELS+=("${label}")
-  done < "${FLATPAK_LIST_FILE}"
-fi
+info "Picker UI + install delegated to /usr/bin/nelhua-install-flatpaks.
+That script is the single source of truth for the Nelhua-opinionated flatpak
+install path — also user-runnable post-setup for 'install something I
+skipped' or for re-install after wiping ~/.local/share/flatpak."
+echo
 
-if (( ${#LABELS[@]} > 0 )); then
-  # Pre-select all labels by default (matches the dialog version's "on" state)
-  PRE="$(IFS=,; echo "${LABELS[*]}")"
-  SELECTED_LABELS="$(printf '%s\n' "${LABELS[@]}" \
-    | gum choose --no-limit \
-                 --header "Select flatpaks to install (SPACE toggle, ENTER confirm). Uncheck anything you don't want. Make sure you're online." \
-                 --selected="${PRE}" \
-                 --cursor-prefix="[ ] " \
-                 --selected-prefix="[x] " \
-                 --unselected-prefix="[ ] " || true)"
-
-  if [[ -n "${SELECTED_LABELS}" ]]; then
-    # Map selected labels back to flatpak IDs
-    declare -a SELECTED_IDS=()
-    while IFS= read -r lbl; do
-      [[ -z "${lbl}" ]] && continue
-      for i in "${!LABELS[@]}"; do
-        if [[ "${LABELS[$i]}" == "${lbl}" ]]; then
-          SELECTED_IDS+=("${IDS[$i]}")
-          break
-        fi
-      done
-    done <<< "${SELECTED_LABELS}"
-
-    info "Installing ${#SELECTED_IDS[@]} flatpak(s). You may be prompted for your password."
-    echo
-    sudo flatpak remote-add --system --if-not-exists flathub "${FLATHUB_REPO_URL}"
-    sudo flatpak remote-modify --system --enable flathub
-    sudo flatpak install --system --noninteractive --or-update flathub "${SELECTED_IDS[@]}"
-    flatpak_rc=$?
-    echo
-    if (( flatpak_rc == 0 )); then
-      ok "Installed ${#SELECTED_IDS[@]} flatpak(s) successfully."
-    else
-      fail "Some flatpaks failed to install (exit ${flatpak_rc}).
-Retry individual ones later with:
-  sudo flatpak install --system flathub <id>"
-    fi
-  fi
-fi
+# nelhua-install-flatpaks (no args) = interactive picker + --user scope.
+# Modern Silverblue/Kinoite/Universal Blue all default to --user; pass
+# --system inside the script if this wizard ever runs on a multi-user
+# deployment. Any non-zero exit (user cancelled, network problem, etc.)
+# doesn't block the rest of the wizard.
+nelhua-install-flatpaks || \
+  fail "Flatpak install step exited non-zero. Retry later with:
+  nelhua-install-flatpaks"
 
 touch "${MARKER}"
 

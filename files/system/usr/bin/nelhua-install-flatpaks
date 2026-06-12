@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# nelhua-install-flatpaks — install Nelhua-opinionated flatpaks
+#
+# Usage:
+#   nelhua-install-flatpaks            # interactive picker, --user scope (default)
+#   nelhua-install-flatpaks --user     # explicit --user (same as no args)
+#   nelhua-install-flatpaks --system   # interactive picker, --system scope
+#   nelhua-install-flatpaks -h         # this message
+#
+# All invocations drop you into a gum checklist over the Nelhua-curated
+# flatpak list at /usr/share/nelhua/flatpaks.list. There is intentionally
+# no "install everything non-interactively" mode and no positional-ID
+# escape hatch — for "install one specific flatpak" use
+# `flatpak install --user flathub <id>` directly; this command exists
+# only to surface the Nelhua-opinionated set.
+#
+# Default scope is --user because on bootc, /var/lib/flatpak (--system) is
+# per-deployment mutable state same as ~/.local/share/flatpak (--user), so
+# --system buys nothing on a single-user box but costs a sudo prompt during
+# first-boot. Modern Silverblue/Kinoite/Universal Blue all default to --user.
+# Pass --system explicitly for multi-user / kiosk deployments.
+#
+# Idempotent: any ID already installed in the target scope is skipped without
+# error. Used by the first-boot wizard and runnable any time after to install
+# something you skipped, refresh after wiping ~/.local/share/flatpak, etc.
+
+set -euo pipefail
+
+LIST_FILE="/usr/share/nelhua/flatpaks.list"
+FLATHUB_URL="https://flathub.org/repo/flathub.flatpakrepo"
+
+SCOPE=user
+
+usage() {
+  sed -n '/^# nelhua-install-flatpaks/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+while (($#)); do
+  case "$1" in
+    --user)    SCOPE=user ;;
+    --system)  SCOPE=system ;;
+    -h|--help) usage 0 ;;
+    *)         echo "Unknown arg: $1" >&2; usage 2 ;;
+  esac
+  shift
+done
+
+# system scope needs sudo (unless we're already root). user scope never does.
+SUDO=()
+if [[ "$SCOPE" == "system" && $EUID -ne 0 ]]; then
+  command -v sudo >/dev/null || { echo "sudo required for --system scope" >&2; exit 1; }
+  SUDO=(sudo)
+fi
+
+command -v gum >/dev/null \
+  || { echo "gum is required (install from the charm yum repo)" >&2; exit 1; }
+[[ -r "$LIST_FILE" ]] \
+  || { echo "List file not readable: $LIST_FILE" >&2; exit 1; }
+
+# Load (id, label) pairs from /usr/share/nelhua/flatpaks.list into parallel
+# arrays. Empty lines + leading-'#' comment lines skipped.
+declare -a LIST_IDS=() LIST_LABELS=()
+while IFS='|' read -r id label; do
+  [[ -z "$id" || "$id" =~ ^[[:space:]]*# ]] && continue
+  LIST_IDS+=("$id")
+  LIST_LABELS+=("$label")
+done < "$LIST_FILE"
+
+if (( ${#LIST_IDS[@]} == 0 )); then
+  echo "List file $LIST_FILE has no entries — nothing to offer." >&2
+  exit 1
+fi
+
+# Gum checklist. Pre-select everything; user unchecks anything they don't want.
+PRE="$(IFS=,; echo "${LIST_LABELS[*]}")"
+SELECTED="$(printf '%s\n' "${LIST_LABELS[@]}" \
+  | gum choose --no-limit \
+               --header "Select flatpaks to install (SPACE toggle, ENTER confirm)." \
+               --selected="$PRE" \
+               --cursor-prefix="[ ] " \
+               --selected-prefix="[x] " \
+               --unselected-prefix="[ ] " || true)"
+
+# Map selected labels back to flatpak IDs.
+declare -a IDS=()
+while IFS= read -r lbl; do
+  [[ -z "$lbl" ]] && continue
+  for i in "${!LIST_LABELS[@]}"; do
+    if [[ "${LIST_LABELS[$i]}" == "$lbl" ]]; then
+      IDS+=("${LIST_IDS[$i]}")
+      break
+    fi
+  done
+done <<< "$SELECTED"
+
+if (( ${#IDS[@]} == 0 )); then
+  echo "Nothing selected — exiting."
+  exit 0
+fi
+
+# Idempotency filter: skip anything already installed in the target scope.
+installed="$(flatpak list "--${SCOPE}" --columns=application 2>/dev/null || true)"
+declare -a TODO=()
+for id in "${IDS[@]}"; do
+  if grep -qFx "$id" <<<"$installed"; then
+    echo "  · already installed: $id"
+  else
+    TODO+=("$id")
+  fi
+done
+
+if (( ${#TODO[@]} == 0 )); then
+  echo "All ${#IDS[@]} selected flatpak(s) already installed in --${SCOPE} scope."
+  exit 0
+fi
+
+echo "Installing ${#TODO[@]} flatpak(s) into --${SCOPE} scope:"
+printf '  · %s\n' "${TODO[@]}"
+echo
+
+"${SUDO[@]}" flatpak remote-add --if-not-exists "--${SCOPE}" flathub "$FLATHUB_URL"
+"${SUDO[@]}" flatpak remote-modify "--${SCOPE}" --enable flathub
+"${SUDO[@]}" flatpak install "--${SCOPE}" --noninteractive --or-update flathub "${TODO[@]}"
+
+echo
+echo "Done."
