@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# nelhua-install-flatpaks — install Nelhua-curated flatpaks
+#
+# Usage:
+#   nelhua-install-flatpaks                # install ALL from list, --user scope (default)
+#   nelhua-install-flatpaks --system       # install ALL from list, --system scope
+#   nelhua-install-flatpaks --pick         # interactive gum picker from list
+#   nelhua-install-flatpaks <id> [<id>...] # install specific IDs only (positional)
+#
+# Flags:
+#   --user            install into per-user flatpak (default; no sudo)
+#   --system          install system-wide (sudo prompts for password)
+#   --pick            gum picker over list entries; combine with --user/--system
+#   --list <path>     override list file path (default
+#                     ${NELHUA_FLATPAK_LIST:-/usr/share/nelhua/flatpaks.list})
+#   -h / --help       this message
+#
+# Default scope is --user because on bootc, /var/lib/flatpak (--system) is
+# per-deployment mutable state same as ~/.local/share/flatpak (--user), so
+# --system buys nothing on a single-user box but costs a sudo prompt during
+# first-boot. Modern Silverblue/Kinoite/Universal Blue all default to --user.
+# Pass --system explicitly when running on a multi-user / kiosk deployment.
+#
+# List file format (one entry per line):
+#   <flatpak-id>|<display label>
+#
+# Idempotent: any ID already installed in the target scope is skipped without
+# error. Building block for the first-boot wizard (which calls --pick) and for
+# user-triggered "install all the curated flatpaks" / "install a missing one".
+
+set -euo pipefail
+
+LIST_FILE="${NELHUA_FLATPAK_LIST:-/usr/share/nelhua/flatpaks.list}"
+FLATHUB_URL="https://flathub.org/repo/flathub.flatpakrepo"
+
+SCOPE=user
+PICK=0
+declare -a IDS=()
+
+usage() {
+  sed -n '/^# nelhua-install-flatpaks/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-0}"
+}
+
+while (($#)); do
+  case "$1" in
+    --user)    SCOPE=user ;;
+    --system)  SCOPE=system ;;
+    --pick)    PICK=1 ;;
+    --list)    shift; LIST_FILE="$1" ;;
+    -h|--help) usage 0 ;;
+    --*)       echo "Unknown flag: $1" >&2; usage 2 ;;
+    *)         IDS+=("$1") ;;
+  esac
+  shift
+done
+
+# system scope needs sudo (unless we're already root). user scope never does.
+SUDO=()
+if [[ "$SCOPE" == "system" && $EUID -ne 0 ]]; then
+  command -v sudo >/dev/null || { echo "sudo required for --system scope" >&2; exit 1; }
+  SUDO=(sudo)
+fi
+
+ensure_flathub() {
+  "${SUDO[@]}" flatpak remote-add --if-not-exists "--${SCOPE}" flathub "$FLATHUB_URL"
+  "${SUDO[@]}" flatpak remote-modify "--${SCOPE}" --enable flathub
+}
+
+# Load (id, label) pairs from list file. Sets LIST_IDS and LIST_LABELS as
+# parallel arrays. Empty + comment lines skipped. Errors if file unreadable.
+declare -a LIST_IDS=() LIST_LABELS=()
+load_list() {
+  [[ -r "$LIST_FILE" ]] || { echo "List file not readable: $LIST_FILE" >&2; exit 1; }
+  while IFS='|' read -r id label; do
+    [[ -z "$id" || "$id" =~ ^[[:space:]]*# ]] && continue
+    LIST_IDS+=("$id")
+    LIST_LABELS+=("$label")
+  done < "$LIST_FILE"
+}
+
+# --pick: gum checkbox UI over the list. Pre-selects everything (matches the
+# first-boot wizard's "uncheck what you don't want" UX).
+if (( PICK )); then
+  command -v gum >/dev/null \
+    || { echo "gum is required for --pick (install from the charm yum repo)" >&2; exit 1; }
+  load_list
+  PRE="$(IFS=,; echo "${LIST_LABELS[*]}")"
+  SELECTED="$(printf '%s\n' "${LIST_LABELS[@]}" \
+    | gum choose --no-limit \
+                 --header "Select flatpaks to install (SPACE toggle, ENTER confirm)." \
+                 --selected="$PRE" \
+                 --cursor-prefix="[ ] " \
+                 --selected-prefix="[x] " \
+                 --unselected-prefix="[ ] " || true)"
+  while IFS= read -r lbl; do
+    [[ -z "$lbl" ]] && continue
+    for i in "${!LIST_LABELS[@]}"; do
+      if [[ "${LIST_LABELS[$i]}" == "$lbl" ]]; then
+        IDS+=("${LIST_IDS[$i]}")
+        break
+      fi
+    done
+  done <<< "$SELECTED"
+fi
+
+# No --pick, no positional args: install everything in the list.
+if (( ${#IDS[@]} == 0 && PICK == 0 )); then
+  load_list
+  IDS=("${LIST_IDS[@]}")
+fi
+
+if (( ${#IDS[@]} == 0 )); then
+  echo "Nothing to install."
+  exit 0
+fi
+
+# Idempotency filter: skip anything already installed in the target scope.
+# `flatpak list --columns=application` outputs one ID per line.
+installed="$(flatpak list "--${SCOPE}" --columns=application 2>/dev/null || true)"
+declare -a TODO=()
+for id in "${IDS[@]}"; do
+  if grep -qFx "$id" <<<"$installed"; then
+    echo "  · already installed: $id"
+  else
+    TODO+=("$id")
+  fi
+done
+
+if (( ${#TODO[@]} == 0 )); then
+  echo "All ${#IDS[@]} requested flatpak(s) already installed in --${SCOPE} scope."
+  exit 0
+fi
+
+echo "Installing ${#TODO[@]} flatpak(s) into --${SCOPE} scope:"
+printf '  · %s\n' "${TODO[@]}"
+echo
+
+ensure_flathub
+"${SUDO[@]}" flatpak install "--${SCOPE}" --noninteractive --or-update flathub "${TODO[@]}"
+
+echo
+echo "Done."
