@@ -33,5 +33,37 @@
       "enabled": false,
     },
   ],
+
+  // Custom regex managers — pick up out-of-band pins inside build.sh that
+  // aren't surfaced by Containerfile/Actions defaults. Each annotation
+  // immediately precedes the line being pinned; the regex captures the
+  // value via the (?<currentValue>...) or (?<currentDigest>...) group.
+  //
+  // Pattern:
+  //   # renovate: datasource=<ds> depName=<repo> [branch=<branch>]
+  //   local (sha|tag)="<value>"
+  //
+  // Two pins exist today (candy-icons SHA + superfile tag); the two
+  // managers below differ only because git-refs uses currentDigest and
+  // github-releases uses currentValue.
+  "customManagers": [
+    // candy-icons (PR #13). Tracks master HEAD via git-refs → SHA digest.
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["^build_files/build\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>\\S+) branch=(?<currentValue>\\S+)\\s*\\n\\s*local sha=\"(?<currentDigest>[0-9a-f]+)\"",
+      ],
+    },
+
+    // superfile (PR #15). Tracks GitHub releases → version tag.
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["^build_files/build\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\\S+)\\s*\\n\\s*local tag=\"(?<currentValue>[^\"]+)\"",
+      ],
+    },
+  ],
 }
 

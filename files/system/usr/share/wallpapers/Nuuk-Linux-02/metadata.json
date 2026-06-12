@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "jtekk@jtekk.dev",
+                "Name": "jtekk"
+            }
+        ],
+        "Id": "Nuuk-Linux-02",
+        "Name": "Nuuk-Linux-02",
+        "License": "CC-BY-SA-4.0"
+    }
+}
