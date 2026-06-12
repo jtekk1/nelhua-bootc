@@ -77,20 +77,20 @@ fi
 
 title "System Flatpaks"
 
-info "Picker UI + install delegated to /usr/bin/nelhua-install-flatpaks --pick.
-That script is the single source of truth for the Nelhua flatpak install path
-(also user-runnable post-setup for 'install everything I skipped' or for
-re-installs after a wipe)."
+info "Picker UI + install delegated to /usr/bin/nelhua-install-flatpaks.
+That script is the single source of truth for the Nelhua-opinionated flatpak
+install path — also user-runnable post-setup for 'install something I
+skipped' or for re-install after wiping ~/.local/share/flatpak."
 echo
 
-# --pick reads /usr/share/nelhua/flatpaks.list, shows the gum checklist, and
-# installs the selection. Default scope is --user (per-user, no sudo) — modern
-# Silverblue/Kinoite/Universal Blue default; pass --system explicitly if this
-# wizard ever runs on a multi-user deployment. Any non-zero exit (user
-# cancelled, network problem, etc.) doesn't block the rest of the wizard.
-nelhua-install-flatpaks --pick || \
+# nelhua-install-flatpaks (no args) = interactive picker + --user scope.
+# Modern Silverblue/Kinoite/Universal Blue all default to --user; pass
+# --system inside the script if this wizard ever runs on a multi-user
+# deployment. Any non-zero exit (user cancelled, network problem, etc.)
+# doesn't block the rest of the wizard.
+nelhua-install-flatpaks || \
   fail "Flatpak install step exited non-zero. Retry later with:
-  nelhua-install-flatpaks --pick"
+  nelhua-install-flatpaks"
 
 touch "${MARKER}"
 
