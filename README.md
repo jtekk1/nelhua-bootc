@@ -51,7 +51,6 @@ Use `:latest` to follow tip-of-main, `:stable` for the deliberate channel, `:raw
 - `.github/workflows/build.yml` — 2D matrix (`desktop × channel` = 4 cells per trigger), buildah → ghcr.io → cosign sign.
 - `.github/workflows/build-disk.yml` — manual workflow that builds qcow2 + ISO from a published tag via bootc-image-builder.
 - `cosign.pub` — signing pubkey baked into the image so the deployed system verifies signatures.
-- `archive/bluebuild-kde/` — historical BlueBuild-era KDE recipe, preserved for reference.
 - `plan.md` — design notes and open items.
 
 ## Local build
