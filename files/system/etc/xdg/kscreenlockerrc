@@ -1,0 +1,22 @@
+# Nelhua KScreenLocker system-wide defaults.
+#
+# /etc/xdg/kscreenlockerrc is read at lockscreen start *before* the user's
+# ~/.config/kscreenlockerrc, so anything here is the out-of-the-box default
+# and gets overridden the moment the user changes it in System Settings
+# → Screen Locking → Appearance.
+#
+# Fedora Kinoite ships its own lockscreen defaults at
+# /usr/share/kde-settings/kde-profile/default/xdg/kscreenlockerrc pointing
+# at /usr/share/wallpapers/Fedora/. This file lives in /etc/xdg/ which the
+# XDG search order ranks above /usr/share/kde-settings/.../xdg/, so we win
+# without having to touch the kde-settings package.
+
+[Greeter]
+WallpaperPlugin=org.kde.image
+
+[Greeter][Wallpaper][org.kde.image][General]
+# Path to a Plasma wallpaper *package* directory — Plasma reads the
+# package's metadata.json + contents/images/ on its own. Same shape as
+# Fedora's default uses.
+Image=file:///usr/share/wallpapers/Nelhua-01/
+PreviewImage=file:///usr/share/wallpapers/Nelhua-01/

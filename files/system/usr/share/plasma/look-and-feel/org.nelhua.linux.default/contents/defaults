@@ -3,7 +3,7 @@
 # system-wide default before any per-user state exists.
 
 [Wallpaper]
-Image=Nelhua
+Image=Nelhua-01
 
 [kdeglobals][KDE]
 LookAndFeelPackage=org.nelhua.linux.default
