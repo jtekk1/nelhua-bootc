@@ -43,9 +43,8 @@
   //   # renovate: datasource=<ds> depName=<repo> [branch=<branch>]
   //   local (sha|tag)="<value>"
   //
-  // Two pins exist today (candy-icons SHA + superfile tag); the two
-  // managers below differ only because git-refs uses currentDigest and
-  // github-releases uses currentValue.
+  // The managers below differ only by datasource — git-refs captures a
+  // currentDigest, github-releases/gitlab-tags capture a currentValue.
   "customManagers": [
     // candy-icons (PR #13). Tracks master HEAD via git-refs → SHA digest.
     {
@@ -62,6 +61,19 @@
       "managerFilePatterns": ["^build_files/build\\.sh$"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\\S+)\\s*\\n\\s*local tag=\"(?<currentValue>[^\"]+)\"",
+      ],
+    },
+
+    // BeautyLine via Garuda Linux's GitLab fork (PR #21). Original
+    // store.kde.org author (1425426) has no public repo; gvolpe/BeautyLine
+    // on GitHub is stale; Garuda's gitlab fork is the actively-tagged
+    // source. gitlab-tags datasource defaults to gitlab.com so no
+    // registryUrl capture is needed.
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["^build_files/build\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>gitlab-tags) depName=(?<depName>\\S+)\\s*\\n\\s*local tag=\"(?<currentValue>[^\"]+)\"",
       ],
     },
   ],

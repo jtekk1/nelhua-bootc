@@ -192,6 +192,71 @@ install_desktop_kde() {
   # F44 ships Plasma 6.6.5 — within the upstream-supported window (6.6 +
   # Wayland-only; Kinoite defaults to Wayland so this isn't a constraint).
   dnf_install kwin-effects-glass
+
+  # Sweet look-and-feel themes (Mars + Ambar Blue). KDE-only — LAFs
+  # ship under /usr/share/plasma/look-and-feel/ and only appear in the
+  # KCM picker on Plasma desktops. Default LAF (org.nelhua.linux.default)
+  # is unaffected; these are *available* options for users to pick.
+  install_lookandfeel_themes
+}
+
+install_lookandfeel_themes() {
+  log "install_lookandfeel_themes"
+  install -d \
+    /usr/share/aurorae/themes \
+    /usr/share/color-schemes \
+    /usr/share/konsole \
+    /usr/share/Kvantum \
+    /usr/share/plasma/desktoptheme \
+    /usr/share/plasma/look-and-feel
+  # Sweet LAF variants (EliverLara/Sweet, GPL-3.0). Same repo, theme per
+  # branch — mars and Ambar-Blue. Each branch ships the full KDE asset
+  # tree the LAF references: kde/aurorae (window deco), kde/colorschemes,
+  # kde/konsole, kde/kvantum (widget style), kde/plasma/desktoptheme,
+  # kde/plasma/look-and-feel/Plasma6. We install all of them so the LAF's
+  # contents/defaults resolves (otherwise Plasma silently falls back to
+  # Breeze for each missing dependent). Sweet-cursors is a SEPARATE repo
+  # (EliverLara/Sweet-cursors); the LAF references it but Plasma falls
+  # back to the system cursor theme when not present — acceptable; not
+  # worth carrying a second repo just for cursors users can install
+  # themselves with `nelhua-install-flatpaks`-style scope later.
+  # renovate: datasource=git-refs depName=EliverLara/Sweet branch=mars
+  local sweet_mars_sha="b057b217c826caaf9bea20245d8f1a6ae410cab4"
+  _install_sweet_variant Sweet-Mars "${sweet_mars_sha}"
+  # renovate: datasource=git-refs depName=EliverLara/Sweet branch=Ambar-Blue
+  local sweet_ambar_blue_sha="df37b2fcc62f68046468c660699193be37221f50"
+  _install_sweet_variant Sweet-Ambar-Blue "${sweet_ambar_blue_sha}"
+}
+
+_install_sweet_variant() {
+  # $1 = LAF name as it appears under kde/plasma/look-and-feel/Plasma6/
+  # $2 = git SHA on the branch carrying this variant
+  local name="$1" sha="$2"
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/sweet.tar.gz" \
+    "https://github.com/EliverLara/Sweet/archive/${sha}.tar.gz"
+  tar -xzf "${tmp}/sweet.tar.gz" -C "${tmp}"
+  local kde="${tmp}/Sweet-${sha}/kde"
+  # LAF package (Plasma 6 only — kde/plasma/look-and-feel/${name} on these
+  # branches is the Plasma 5 LAF, intentionally skipped).
+  cp -r "${kde}/plasma/look-and-feel/Plasma6/${name}" \
+    /usr/share/plasma/look-and-feel/
+  # Dependent assets referenced by LAF's contents/defaults. Glob-copy
+  # because the upstream is inconsistent about case: LAF references
+  # "Sweet-mars" (lowercase 'm') for the plasma desktop theme while
+  # using "Sweet-Mars" (capital M) for aurorae/colorscheme — and
+  # each branch's tree may carry extra variant files. Better to ship
+  # the whole subdir than guess the canonical name per asset type.
+  cp -r "${kde}/aurorae/themes/${name}"     /usr/share/aurorae/themes/   2>/dev/null || true
+  cp -r "${kde}/colorschemes/."             /usr/share/color-schemes/    2>/dev/null || true
+  cp -r "${kde}/kvantum/${name}"            /usr/share/Kvantum/          2>/dev/null || true
+  for d in "${kde}/plasma/desktoptheme/"*; do
+    [[ -d "$d" ]] && cp -r "$d" /usr/share/plasma/desktoptheme/
+  done
+  cp -r "${kde}/konsole/." /usr/share/konsole/ 2>/dev/null || true
+  # Skip kde/sddm/ — Kinoite uses plasma-login-manager, not SDDM, so
+  # those theme files would just be dead weight under /usr/share/sddm/.
+  rm -rf "${tmp}"
 }
 
 install_extras() {
@@ -222,21 +287,67 @@ install_extras() {
 
 install_icon_themes() {
   log "install_icon_themes"
+  install -d /usr/share/icons
+  _install_candy_icons
+  _install_beautyline
+  _install_tela_circle
+}
+
+_install_candy_icons() {
   # candy-icons (EliverLara, GPL-3.0). FollowsColorScheme=true so the set
   # auto-tracks BreezeDark vs BreezeLight without a separate dark variant —
   # one install covers light/dark users. Pinned to a SHA so Renovate (or a
   # manual bump) has a single source of truth and reproducibility holds.
   # renovate: datasource=git-refs depName=EliverLara/candy-icons branch=master
   local sha="83512fbcadcb7e1015ebbe1729a1894946b021be"
-  local tmp
-  tmp="$(mktemp -d)"
+  local tmp; tmp="$(mktemp -d)"
   curl -fsSL -o "${tmp}/candy.tar.gz" \
     "https://github.com/EliverLara/candy-icons/archive/${sha}.tar.gz"
   tar -xzf "${tmp}/candy.tar.gz" -C "${tmp}"
-  install -d /usr/share/icons
   mv "${tmp}/candy-icons-${sha}" /usr/share/icons/candy-icons
   rm -rf "${tmp}"
   gtk-update-icon-cache -f /usr/share/icons/candy-icons 2>/dev/null || true
+}
+
+_install_beautyline() {
+  # BeautyLine (Garuda Linux fork on GitLab, GPL-3.0 — see COPYING in
+  # source tree). Original store.kde.org author (1425426) has no public
+  # repo; gvolpe/BeautyLine on GitHub is stale (7 commits, last release
+  # Jan 2022 + a multi-version subdir layout that's not drop-in). Garuda's
+  # fork is actively tagged (3.0.x line, tagged Nov 2025) and the repo
+  # root IS the icon theme dir (index.theme + apps/devices/places/etc).
+  # GitLab tag pin → tracked by the gitlab-tags custom manager in
+  # renovate.json5.
+  # renovate: datasource=gitlab-tags depName=garuda-linux/themes-and-settings/artwork/beautyline
+  local tag="3.0.3"
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/beautyline.tar.gz" \
+    "https://gitlab.com/garuda-linux/themes-and-settings/artwork/beautyline/-/archive/${tag}/beautyline-${tag}.tar.gz"
+  tar -xzf "${tmp}/beautyline.tar.gz" -C "${tmp}"
+  mv "${tmp}/beautyline-${tag}" /usr/share/icons/BeautyLine
+  rm -rf "${tmp}"
+  gtk-update-icon-cache -f /usr/share/icons/BeautyLine 2>/dev/null || true
+}
+
+_install_tela_circle() {
+  # Tela-circle (vinceliuice, GPL-3.0). 915 stars, regular releases — the
+  # well-maintained option of the bunch. Unlike candy/BeautyLine the repo
+  # is NOT a drop-in theme dir; source variants live in src/ and install.sh
+  # generates the per-color theme tree at the chosen install root. With no
+  # args, install.sh ships ONE variant ("standard") to /usr/share/icons/
+  # Tela-circle when run as root — the right minimum for a "Tela circle is
+  # available" image. Users who want other colors (15 available: black,
+  # blue, brown, purple, etc.) can re-run install.sh from a clone with
+  # their pick.
+  # renovate: datasource=git-refs depName=vinceliuice/Tela-circle-icon-theme branch=master
+  local sha="e3171a34427d0900046dedbdf9979631adea7608"
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/tela.tar.gz" \
+    "https://github.com/vinceliuice/Tela-circle-icon-theme/archive/${sha}.tar.gz"
+  tar -xzf "${tmp}/tela.tar.gz" -C "${tmp}"
+  ( cd "${tmp}/Tela-circle-icon-theme-${sha}" && ./install.sh )
+  rm -rf "${tmp}"
+  # install.sh runs gtk-update-icon-cache itself; no second call needed.
 }
 
 install_superfile() {
