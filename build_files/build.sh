@@ -198,6 +198,12 @@ install_desktop_kde() {
   # KCM picker on Plasma desktops. Default LAF (org.nelhua.linux.default)
   # is unaffected; these are *available* options for users to pick.
   install_lookandfeel_themes
+
+  # Third-party KWin effects bundle (Burn-My-Windows, Kinetic, Geometry
+  # Change, Squash-Plus). Drops effect kpackages into /usr/share/kwin/
+  # effects/ — *available* in System Settings → Window Effects but not
+  # enabled by default. Same posture as the LAFs above.
+  install_kwin_effects
 }
 
 install_lookandfeel_themes() {
@@ -256,6 +262,99 @@ _install_sweet_variant() {
   cp -r "${kde}/konsole/." /usr/share/konsole/ 2>/dev/null || true
   # Skip kde/sddm/ — Kinoite uses plasma-login-manager, not SDDM, so
   # those theme files would just be dead weight under /usr/share/sddm/.
+  rm -rf "${tmp}"
+}
+
+install_kwin_effects() {
+  log "install_kwin_effects"
+  install -d /usr/share/kwin/effects
+  _install_burn_my_windows
+  _install_kinetic_effects
+  _install_geometry_change
+  _install_squash_plus
+}
+
+_install_burn_my_windows() {
+  # Burn-My-Windows (Schneegans, GPL-3.0). v48 ships a bundled tarball
+  # `burn_my_windows_kwin6.tar.gz` containing ~20 KWin 6 effect kpackages
+  # (Aura Glow, Doom, Energize A/B, Fire, Focus, Glide, Glitch, Hexagon,
+  # Incinerate, Pixelate, Pixel Wheel, Pixel Wipe, Portal, RGB Warp,
+  # Team Rocket, TV, TV Glitch, Wisps). Drop them ALL into /usr/share/
+  # kwin/effects/ — the kdestore curation list named 14 of them but the
+  # tarball is all-or-nothing and the bonus effects are ~100 KB each, so
+  # ship the whole set instead of cherry-picking. None auto-enable;
+  # users pick one per minimize/open/close transition in System Settings.
+  # The author also publishes per-effect tarballs as separate release
+  # assets, but tracking one bundle pin via github-releases is simpler
+  # than 14 individual pins. F44 ships Plasma 6.6.5 → kwin6 is the
+  # right tree.
+  # renovate: datasource=github-releases depName=Schneegans/Burn-My-Windows
+  local tag="v48"
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/bmw.tar.gz" \
+    "https://github.com/Schneegans/Burn-My-Windows/releases/download/${tag}/burn_my_windows_kwin6.tar.gz"
+  tar -xzf "${tmp}/bmw.tar.gz" -C "${tmp}"
+  # Tarball layout: kwin6_effect_*/ dirs may sit at the archive root OR
+  # inside a single wrapper directory depending on upstream's packaging
+  # decisions across releases. Use `find` so a future restructure won't
+  # silently turn this into a no-op.
+  find "${tmp}" -mindepth 1 -maxdepth 3 -type d -name 'kwin6_effect_*' \
+    -exec cp -r {} /usr/share/kwin/effects/ \;
+  rm -rf "${tmp}"
+}
+
+_install_kinetic_effects() {
+  # Kinetic Animations (gurrgur/kwin-effects-kinetic, GPL-3.0). Four
+  # effect kpackages at the repo root: kinetic_fadingpopups (Menu Fade),
+  # kinetic_maximize (Maximize), kinetic_scale (Open/Close), kinetic_squash
+  # (Minimize). Repo has no tagged releases — pin to a main HEAD SHA.
+  # P6-targeted per upstream description.
+  # renovate: datasource=git-refs depName=gurrgur/kwin-effects-kinetic branch=main
+  local sha="93f2c57b0d28dcabbb8cfdae260632d109a0d16d"
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/kinetic.tar.gz" \
+    "https://github.com/gurrgur/kwin-effects-kinetic/archive/${sha}.tar.gz"
+  tar -xzf "${tmp}/kinetic.tar.gz" -C "${tmp}"
+  local root="${tmp}/kwin-effects-kinetic-${sha}"
+  for d in "${root}"/kinetic_*; do
+    [[ -d "$d" ]] && cp -r "$d" /usr/share/kwin/effects/
+  done
+  rm -rf "${tmp}"
+}
+
+_install_geometry_change() {
+  # Geometry Change (peterfajdiga, GPL). Single effect kpackage; v1.5
+  # release ships `kwin4_effect_geometry_change_1_5.tar.gz` containing
+  # one effect dir. Plasma 6 compatible per the v1.5 release notes.
+  # renovate: datasource=github-releases depName=peterfajdiga/kwin4_effect_geometry_change
+  local tag="v1.5"
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/gc.tar.gz" \
+    "https://github.com/peterfajdiga/kwin4_effect_geometry_change/releases/download/${tag}/kwin4_effect_geometry_change_1_5.tar.gz"
+  tar -xzf "${tmp}/gc.tar.gz" -C "${tmp}"
+  find "${tmp}" -mindepth 1 -maxdepth 3 -type d -name 'kwin4_effect_*' \
+    -exec cp -r {} /usr/share/kwin/effects/ \;
+  rm -rf "${tmp}"
+}
+
+_install_squash_plus() {
+  # Squash-Plus (Shaurya-Kalia, GPL-3.0). The actively-maintained
+  # successor to Squash2 — Squash2's own README points users here and
+  # explicitly says "this effect won't see further updates." The original
+  # KDE store curation list named Squash2 (1806319); we ship Squash-Plus
+  # instead per upstream's explicit recommendation. Same author, same
+  # animation shape (modified minimize/unminimize), but kept current
+  # against KWin API drift. No releases tagged — pin to main HEAD SHA.
+  # The repo root IS the kpackage (metadata.json + contents/), so we
+  # install it as /usr/share/kwin/effects/kwin4_effect_squashplus/ to
+  # match the Id field in metadata.json.
+  # renovate: datasource=git-refs depName=Shaurya-Kalia/Squash-Plus branch=main
+  local sha="7a59dccfa1c8137e0504bdf50bafea38c08f1948"
+  local tmp; tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/squash.tar.gz" \
+    "https://github.com/Shaurya-Kalia/Squash-Plus/archive/${sha}.tar.gz"
+  tar -xzf "${tmp}/squash.tar.gz" -C "${tmp}"
+  mv "${tmp}/Squash-Plus-${sha}" /usr/share/kwin/effects/kwin4_effect_squashplus
   rm -rf "${tmp}"
 }
 
