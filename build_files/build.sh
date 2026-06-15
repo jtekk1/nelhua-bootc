@@ -134,12 +134,16 @@ install_hardware() {
     mesa-dri-drivers mesa-vulkan-drivers vulkan-loader \
     amd-gpu-firmware amd-ucode-firmware lact \
     intel-media-driver mesa-va-drivers
-  # Power profiles + biometrics. Fedora's kinoite base ships these
-  # preset-enabled and Aurora deliberately defers to that; fedora-bootc
-  # is leaner, so install explicitly. Idempotent if the base already has
-  # them. PPD is the modern KDE/GNOME default — TLP would conflict with
-  # Plasma 6's built-in PPD KCM, so don't ship both.
-  dnf_install power-profiles-daemon fprintd
+  # Power profiles + biometrics are inherited from the base:
+  # - kinoite/fedora-bootc both pre-install fprintd; nothing to do for KDE
+  #   biometrics — Plasma 6's kcm_fingerprint hits fprintd via DBus.
+  # - kinoite ships `tuned-ppd` (TuneD with a PPD-API shim) — KDE's power
+  #   KCM speaks PPD, so the KCM works the same whether the backend is
+  #   PPD or tuned-ppd. Layering `power-profiles-daemon` here would
+  #   hard-conflict with the tuned-ppd already in /usr (both claim the
+  #   `ppd-service` capability). Leave the base's choice in place; if a
+  #   user wants pure PPD they can `rpm-ostree swap tuned-ppd power-
+  #   profiles-daemon` per-deployment.
   # ZSA Moonlander/Voyager device access: 50-zsa.rules uses TAG+="uaccess",
   # so the active session user gets device access via systemd-logind. No
   # plugdev group / no per-user usermod step.
