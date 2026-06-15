@@ -134,6 +134,12 @@ install_hardware() {
     mesa-dri-drivers mesa-vulkan-drivers vulkan-loader \
     amd-gpu-firmware amd-ucode-firmware lact \
     intel-media-driver mesa-va-drivers
+  # Power profiles + biometrics. Fedora's kinoite base ships these
+  # preset-enabled and Aurora deliberately defers to that; fedora-bootc
+  # is leaner, so install explicitly. Idempotent if the base already has
+  # them. PPD is the modern KDE/GNOME default — TLP would conflict with
+  # Plasma 6's built-in PPD KCM, so don't ship both.
+  dnf_install power-profiles-daemon fprintd
   # ZSA Moonlander/Voyager device access: 50-zsa.rules uses TAG+="uaccess",
   # so the active session user gets device access via systemd-logind. No
   # plugdev group / no per-user usermod step.
@@ -493,6 +499,10 @@ enable_first_boot_services() {
   # Shipped (but not enabled) by the upstream bootc package; we enable here.
   # Matches the ublue pattern (Bluefin/Bazzite/Aurora ship this enabled).
   systemctl enable bootc-fetch-apply-updates.timer
+  # fwupd LVFS metadata refresh — belt-and-suspenders enable in case the
+  # Fedora preset isn't carried forward by fedora-bootc. Kinoite has it
+  # preset-on; Aurora relies on that and doesn't enable explicitly.
+  systemctl enable fwupd-refresh.timer
   # Weekly Nix store GC. Guarded by ConditionPathExists on the nix daemon
   # binary; no-op until Determinate Nix has actually been installed.
   systemctl enable nix-gc.timer
