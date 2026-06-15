@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# nelhua-setup-tty-autologin — configure agetty autologin on a Linux VT.
+#
+# Usage:
+#   sudo nelhua-setup-tty-autologin                  # tty2, invoking user
+#   sudo nelhua-setup-tty-autologin -t tty3 -u alice
+#   sudo nelhua-setup-tty-autologin --remove         # undo on tty2
+#
+# Drops a systemd unit override at
+# /etc/systemd/system/getty@<tty>.service.d/autologin.conf so agetty boots
+# straight into a logged-in shell on that VT — no login prompt.
+#
+# Use cases: kiosk consoles, debug/recovery TTYs, server-as-appliance.
+# Default TTY is tty2 because tty1 is owned by the display manager
+# (plasmalogin / SDDM / niri-greetd) on graphical builds — overriding
+# tty1 there breaks the boot-to-desktop flow.
+#
+# Warnings:
+#   * Anyone with physical access to the configured VT boots straight to
+#     a logged-in shell. Only enable on trusted hardware (kiosks behind
+#     locked panels, single-user machines, server consoles in a locked
+#     rack).
+#   * Disk encryption (LUKS) still happens before login — autologin
+#     doesn't bypass it.
+#   * This is TTY autologin (agetty). Plasma/SDDM session autologin is
+#     a separate setting in the display-manager config; use that for
+#     graphical-session autologin instead.
+#
+# Idempotent: re-running with the same args rewrites the same file.
+
+set -euo pipefail
+
+PROG="$(basename "$0")"
+
+usage() {
+  cat <<EOF
+Usage: $PROG [-t TTY] [-u USER] [-y] [--remove]
+
+Configure agetty autologin on a Linux virtual console.
+
+  -t, --tty TTY      VT to configure (default: tty2)
+  -u, --user USER    User to autologin as (default: invoking user)
+  -y, --yes          Skip the interactive confirmation
+  --remove           Remove autologin override from the given TTY
+  -h, --help         Show this help
+
+Examples:
+  sudo $PROG                       # autologin invoking user on tty2
+  sudo $PROG -t tty3 -u kiosk -y   # autologin 'kiosk' on tty3, no prompt
+  sudo $PROG --remove -t tty3      # disable on tty3
+EOF
+}
+
+# Self-elevate. Re-exec under sudo so we keep SUDO_USER for the default user.
+if (( EUID != 0 )); then
+  exec sudo -E "$0" "$@"
+fi
+
+TTY="tty2"
+USER_TO_AUTOLOGIN="${SUDO_USER:-${USER:-root}}"
+ASSUME_YES=0
+REMOVE=0
+
+while (( $# )); do
+  case "$1" in
+    -t|--tty)    TTY="$2"; shift 2 ;;
+    -u|--user)   USER_TO_AUTOLOGIN="$2"; shift 2 ;;
+    -y|--yes)    ASSUME_YES=1; shift ;;
+    --remove)    REMOVE=1; shift ;;
+    -h|--help)   usage; exit 0 ;;
+    *) echo "$PROG: unknown arg: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+
+# Normalize the TTY arg — accept "2", "tty2", "/dev/tty2".
+TTY="${TTY##*/}"
+TTY="${TTY#tty}"
+if ! [[ "$TTY" =~ ^[0-9]+$ ]]; then
+  echo "$PROG: TTY must be a number, tty<N>, or /dev/tty<N>" >&2
+  exit 2
+fi
+TTY="tty${TTY}"
+
+OVERRIDE_DIR="/etc/systemd/system/getty@${TTY}.service.d"
+OVERRIDE_FILE="${OVERRIDE_DIR}/autologin.conf"
+
+if (( REMOVE )); then
+  if [[ -f "$OVERRIDE_FILE" ]]; then
+    rm -f "$OVERRIDE_FILE"
+    rmdir --ignore-fail-on-non-empty "$OVERRIDE_DIR" 2>/dev/null || true
+    systemctl daemon-reload
+    echo "$PROG: removed autologin override for ${TTY}."
+    echo "  Effective on next boot or after:"
+    echo "    sudo systemctl restart getty@${TTY}.service"
+  else
+    echo "$PROG: no autologin override at ${OVERRIDE_FILE} — nothing to do."
+  fi
+  exit 0
+fi
+
+if ! id -u "$USER_TO_AUTOLOGIN" >/dev/null 2>&1; then
+  echo "$PROG: user '${USER_TO_AUTOLOGIN}' does not exist." >&2
+  exit 1
+fi
+
+if [[ "$TTY" == "tty1" ]]; then
+  echo "Warning: tty1 is owned by the display manager on graphical builds." >&2
+  echo "  Overriding tty1 may break boot-to-desktop. Use tty2-tty6 unless" >&2
+  echo "  you've already disabled the display manager." >&2
+fi
+
+if (( ASSUME_YES == 0 )); then
+  cat <<EOF
+
+About to enable autologin:
+  VT:    ${TTY}
+  User:  ${USER_TO_AUTOLOGIN}
+  File:  ${OVERRIDE_FILE}
+
+Anyone with physical access to ${TTY} will boot straight into a
+logged-in shell as ${USER_TO_AUTOLOGIN}.
+
+EOF
+  read -rp "Continue? (y/N) " ans
+  case "$ans" in
+    y|Y|yes|YES) ;;
+    *) echo "Aborted."; exit 0 ;;
+  esac
+fi
+
+install -d -m 0755 "$OVERRIDE_DIR"
+# Empty ExecStart= first to clear the unit's default (systemd appends
+# drop-ins by default; ExecStart specifically requires explicit reset to
+# replace rather than chain). The leading `-` on the second ExecStart
+# tells systemd to ignore agetty's non-zero exit (matches the stock
+# getty@.service definition).
+cat >"$OVERRIDE_FILE" <<EOF
+# Drop-in installed by nelhua-setup-tty-autologin.
+# Re-run \`sudo nelhua-setup-tty-autologin --remove -t ${TTY}\` to undo.
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -f -- \\\\u' --noclear --autologin ${USER_TO_AUTOLOGIN} %I \$TERM
+EOF
+chmod 0644 "$OVERRIDE_FILE"
+
+systemctl daemon-reload
+
+echo "$PROG: configured ${TTY} → autologin as ${USER_TO_AUTOLOGIN}."
+echo "  Effective on next boot or after:"
+echo "    sudo systemctl restart getty@${TTY}.service"
