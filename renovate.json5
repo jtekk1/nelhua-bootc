@@ -76,6 +76,20 @@
         "# renovate: datasource=(?<datasource>gitlab-tags) depName=(?<depName>\\S+)\\s*\\n\\s*local tag=\"(?<currentValue>[^\"]+)\"",
       ],
     },
+
+    // chunkah container image pin in the build workflow (PR #25). The
+    // pin lives inside a `run:` block as `CHUNKAH_IMAGE: "quay.io/coreos/
+    // chunkah:vX.Y.Z"`, which the default github-actions manager doesn't
+    // touch (it only looks at `uses:` references). chunkah is pre-1.0,
+    // so a tag pin is fine — bumps will surface as PRs we read before
+    // merging.
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["^\\.github/workflows/build\\.yml$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s*\\n\\s*env:\\s*\\n\\s*CHUNKAH_IMAGE: \"[^:]+:(?<currentValue>v[^\"]+)\"",
+      ],
+    },
   ],
 }
 
