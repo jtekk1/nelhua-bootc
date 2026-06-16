@@ -149,6 +149,58 @@ jobs:
             IMAGE_REGISTRY_PATH=${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
             DESKTOP=${{ matrix.desktop.name }}
 
+      - name: Pick first tag for chunkah input
+        id: chunkah_tag
+        run: |
+          # buildah-build tags the image with every metadata tag (they're
+          # aliases to one digest); chunkah only needs one of them as --from.
+          FIRST_TAG=$(printf '%s\n' ${{ steps.metadata.outputs.tags }} | head -n1)
+          echo "tag=${FIRST_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Postprocess with chunkah
+        # Repacks the single monolithic `RUN build.sh` layer into many
+        # content-similarity layers, so an upgrade delta only fetches the
+        # blobs that actually changed. Expected payback: 2 GB -> 150-400 MB
+        # per `bootc upgrade`. Runs on PR builds too so chunkah breakage
+        # surfaces at PR time, not on the first merged push.
+        # renovate: datasource=docker depName=quay.io/coreos/chunkah
+        env:
+          CHUNKAH_IMAGE: "quay.io/coreos/chunkah:v0.6.0"
+        run: |
+          mkdir -p ./out
+          SRC="localhost/${IMAGE_NAME}:${{ steps.chunkah_tag.outputs.tag }}"
+          # SOURCE_DATE_EPOCH pinned to the commit timestamp so chunkah
+          # produces the same manifest digest on identical input — needed
+          # for cosign verification to stay deterministic.
+          export SOURCE_DATE_EPOCH
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct "${{ github.sha }}")
+          # chunkah only sees the rootfs at /chunkah; it does NOT read the
+          # source image's OCI config automatically. Without this the
+          # output loses labels (org.opencontainers.image.*), env, cmd,
+          # entrypoint, etc. Pass the buildah-built image's full inspect
+          # blob via CHUNKAH_CONFIG_STR per the upstream README pattern.
+          export CHUNKAH_CONFIG_STR
+          CHUNKAH_CONFIG_STR="$(podman inspect "$SRC")"
+          # --mount=type=image is podman's native way to surface another
+          # image's rootfs inside a container. Requires the source image
+          # in podman's local storage, which buildah-build provides since
+          # buildah + rootless podman share ~/.local/share/containers.
+          # NOTE: podman's --mount=type=image accepts `destination=` or
+          # `dst=` for the mount point — NOT `dest=`. The chunkah README
+          # uses `dest=` but newer podman (rootless on ubuntu-24.04) is
+          # stricter. Keep this canonical or future podman bumps will
+          # break the step the same way.
+          podman run --rm --privileged \
+            --mount="type=image,src=${SRC},destination=/chunkah" \
+            -v "$PWD/out:/out" \
+            -e SOURCE_DATE_EPOCH \
+            -e CHUNKAH_CONFIG_STR \
+            "${CHUNKAH_IMAGE}" build \
+              --max-layers 128 \
+              --output oci:/out/image
+          # Sanity check: chunkah should have produced an OCI dir.
+          test -f ./out/image/index.json
+
       - name: Login to ghcr.io
         if: github.event_name != 'pull_request'
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
@@ -157,16 +209,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push to ghcr.io
+      - name: Push chunkah output to ghcr.io
+        # Replaces redhat-actions/push-to-registry — that action pushes
+        # from containers-storage, but we want to push chunkah's oci:./out
+        # output (the whole point of the postprocess step). skopeo's
+        # --preserve-digests guarantees the on-registry manifest digest
+        # matches what cosign will sign in the next step.
         if: github.event_name != 'pull_request'
-        id: push
-        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          image: ${{ env.IMAGE_NAME }}
-          tags: ${{ steps.metadata.outputs.tags }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}"
+          for tag in ${{ steps.metadata.outputs.tags }}; do
+            skopeo copy --preserve-digests \
+              oci:./out/image \
+              "docker://${IMAGE_FULL}:${tag}"
+          done
 
       - name: Install cosign
         if: github.event_name != 'pull_request'
