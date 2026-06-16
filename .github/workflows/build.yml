@@ -168,16 +168,29 @@ jobs:
           CHUNKAH_IMAGE: "quay.io/coreos/chunkah:v0.6.0"
         run: |
           mkdir -p ./out
+          SRC="localhost/${IMAGE_NAME}:${{ steps.chunkah_tag.outputs.tag }}"
           # SOURCE_DATE_EPOCH pinned to the commit timestamp so chunkah
           # produces the same manifest digest on identical input — needed
           # for cosign verification to stay deterministic.
+          export SOURCE_DATE_EPOCH
           SOURCE_DATE_EPOCH=$(git log -1 --format=%ct "${{ github.sha }}")
+          # chunkah only sees the rootfs at /chunkah; it does NOT read the
+          # source image's OCI config automatically. Without this the
+          # output loses labels (org.opencontainers.image.*), env, cmd,
+          # entrypoint, etc. Pass the buildah-built image's full inspect
+          # blob via CHUNKAH_CONFIG_STR per the upstream README pattern.
+          export CHUNKAH_CONFIG_STR
+          CHUNKAH_CONFIG_STR="$(podman inspect "$SRC")"
+          # --mount=type=image is podman's native way to surface another
+          # image's rootfs inside a container. Requires the source image
+          # in podman's local storage, which buildah-build provides since
+          # buildah + rootless podman share ~/.local/share/containers.
           podman run --rm --privileged \
+            --mount="type=image,src=${SRC},dest=/chunkah" \
             -v "$PWD/out:/out" \
-            -v /var/lib/containers:/var/lib/containers \
-            -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
+            -e SOURCE_DATE_EPOCH \
+            -e CHUNKAH_CONFIG_STR \
             "${CHUNKAH_IMAGE}" build \
-              --from "containers-storage:localhost/${IMAGE_NAME}:${{ steps.chunkah_tag.outputs.tag }}" \
               --max-layers 128 \
               --output oci:/out/image
           # Sanity check: chunkah should have produced an OCI dir.
