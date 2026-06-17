@@ -190,13 +190,24 @@ jobs:
           # uses `dest=` but newer podman (rootless on ubuntu-24.04) is
           # stricter. Keep this canonical or future podman bumps will
           # break the step the same way.
+          # --prune /sysroot/ + --label ostree.{commit,final-diffid}-
+          # convert an OSTree-derived base (our KDE build's fedora-kinoite)
+          # into a "plain" bootc image. Without them bootc sees the OSTree
+          # labels but chunkah-repacked layers don't carry the matching
+          # per-layer ostree.final-diffid annotations, so it errors:
+          #   "Missing ostree.final-diffid sha256:<layer-hash>"
+          # No-op on the mango build (fedora-bootc:44 is non-OSTree since
+          # Fedora 41), so apply universally rather than conditionally.
           podman run --rm --privileged \
             --mount="type=image,src=${SRC},destination=/chunkah" \
             -v "$PWD/out:/out" \
             -e SOURCE_DATE_EPOCH \
             -e CHUNKAH_CONFIG_STR \
             "${CHUNKAH_IMAGE}" build \
+              --prune /sysroot/ \
               --max-layers 128 \
+              --label ostree.commit- \
+              --label ostree.final-diffid- \
               --output oci:/out/image
           # Sanity check: chunkah should have produced an OCI dir.
           test -f ./out/image/index.json
