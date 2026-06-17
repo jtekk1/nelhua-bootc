@@ -20,3 +20,6 @@ blurEnabled=false
 # (color-level adjustments behind translucent regions) is a separate
 # upstream effect.
 contrastEnabled=true
+
+# (Measurement marker — chunkah delta verification, see PR #27. Revert
+# this line in the next PR once the delta number is captured.)
