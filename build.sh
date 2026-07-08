@@ -1,10 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: ./build.sh [mango|kde] [tag]
-#   ./build.sh             # mango, :latest
-#   ./build.sh kde         # kde, :latest
-#   ./build.sh kde dev     # kde, :dev
+# Usage: ./build.sh [mango|kde|kinectic] [tag]
+#   ./build.sh                # mango, :latest
+#   ./build.sh kde            # kde, :latest
+#   ./build.sh kde dev        # kde, :dev
+#   ./build.sh kinectic       # kinectic (KineticWE), :latest
 DESKTOP="${1:-${DESKTOP:-mango}}"
 TAG="${2:-${TAG:-latest}}"
 
@@ -17,8 +18,12 @@ case "$DESKTOP" in
     IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}"
     BASE_IMAGE="${BASE_IMAGE:-quay.io/fedora/fedora-kinoite:44}"
     ;;
+  kinectic)
+    IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic}"
+    BASE_IMAGE="${BASE_IMAGE:-quay.io/fedora/fedora-kinoite:44}"
+    ;;
   *)
-    echo "Unknown desktop: $DESKTOP (expected: mango | kde)" >&2
+    echo "Unknown desktop: $DESKTOP (expected: mango | kde | kinectic)" >&2
     exit 1
     ;;
 esac

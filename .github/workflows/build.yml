@@ -47,6 +47,11 @@ jobs:
             image: nelhua-kde
             description: "Nelhua Linux bootc (KDE edition)"
             keywords: "bootc,fedora,kde,plasma,kinoite,nelhua"
+          - name: kinectic
+            base_repo: "quay.io/fedora/fedora-kinoite"
+            image: nelhua-kinectic
+            description: "Nelhua Linux bootc (KineticWE edition — tiling KWin fork)"
+            keywords: "bootc,fedora,kde,plasma,kinoite,kineticwe,tiling,nelhua"
         channel:
           - { name: stable,  base_tag: "44" }
           - { name: rawhide, base_tag: "rawhide" }
