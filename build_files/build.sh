@@ -58,7 +58,16 @@ enable_repos() {
     https://pkgs.tailscale.com/stable/fedora/tailscale.repo
 
   log "  -> Charm repo (gum, glow, vhs, soft-serve)"
-  rpm --import https://repo.charm.sh/yum/gpg.key
+  # Charm's GPG key is vendored (files/dnf/charm.key) rather than fetched.
+  # repo.charm.sh is Gemfury-backed and has been unreliable — three
+  # consecutive CI runs hit `curl: (7) Failed to connect ... after 79s`
+  # on the gpg.key path while the same host resolved fine locally elsewhere.
+  # The vendored key is rsa4096 (fingerprint ED927B38…4DFD35C), expires
+  # 2027-07-13. baseurl= stays remote for package fetch; charm.repo's
+  # gpgkey= now points at the vendored key at /etc/pki/rpm-gpg/… so
+  # runtime dnf-refresh doesn't refetch the key either.
+  install -Dm0644 /ctx/repos/charm.key /etc/pki/rpm-gpg/RPM-GPG-KEY-charm
+  rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-charm
   install -Dm0644 /ctx/repos/charm.repo /etc/yum.repos.d/charm.repo
 
   log "  -> Tekk forgejo repo"
