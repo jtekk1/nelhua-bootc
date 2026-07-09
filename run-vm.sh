@@ -1,14 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: TYPE=qcow2 ./run-vm.sh [mango|kde]
+# Usage: TYPE=qcow2 ./run-vm.sh [mango|kde|kinectic]
 DESKTOP="${1:-${DESKTOP:-mango}}"
 TYPE="${TYPE:-qcow2}"
 
 case "$DESKTOP" in
-  mango) IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
-  kde)   IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
-  *) echo "Unknown desktop: $DESKTOP (mango | kde)" >&2; exit 1 ;;
+  mango)    IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
+  kde)      IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
+  kinectic) IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic}" ;;
+  *) echo "Unknown desktop: $DESKTOP (mango | kde | kinectic)" >&2; exit 1 ;;
 esac
 
 cd "$(dirname "$0")"
