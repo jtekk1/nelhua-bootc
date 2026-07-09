@@ -11,12 +11,12 @@ Personal Fedora-based [bootc](https://github.com/bootc-dev/bootc) images. One so
 
 | Image | Desktop | Base | Channels (OCI tags) |
 |---|---|---|---|
-| `ghcr.io/jtekk1/nelhua-mango` | [Mango](https://github.com/DreamMaoMao/mango) Wayland compositor | `quay.io/fedora/fedora-bootc:44` | ⚠️ CI paused — last published tags remain valid |
+| `ghcr.io/jtekk1/nelhua-mango` | [Mango](https://github.com/DreamMaoMao/mango) Wayland compositor | `quay.io/fedora/fedora-bootc:44` | `:latest`, `:stable`, `:v<tag>`, dated `:<channel>.YYYYMMDD` |
 | `ghcr.io/jtekk1/nelhua-kde` | KDE Plasma 6 | `quay.io/fedora/fedora-kinoite:44` | `:latest`, `:stable`, `:v<tag>`, dated `:<channel>.YYYYMMDD` |
 | `ghcr.io/jtekk1/nelhua-kinectic` | KDE Plasma 6 with [KineticWE](https://gitlab.com/theblackdon/kineticwe) — tiling KWin fork swapping the stock compositor | `quay.io/fedora/fedora-kinoite:44` | `:latest`, `:stable`, `:v<tag>`, dated `:<channel>.YYYYMMDD` |
 | `ghcr.io/jtekk1/nelhua-kde-nvidia-open` | KDE Plasma 6 + NVIDIA **open kernel modules** driver (Turing+ / RTX 20-series and newer) | `quay.io/fedora/fedora-kinoite:44` | `:latest`, `:stable`, `:v<tag>`, dated `:<channel>.YYYYMMDD` |
 
-- **mango**: CI is paused because Terra F44 currently doesn't publish `libscenefx-0.4.so`, so `mangowm` can't be resolved. `install_desktop_mango()` and `./build.sh mango` still work locally — CI re-enables the flavor once Terra restores scenefx.
+- **mango**: previously paused for ~3 weeks after Terra F44 bumped `scenefx` from 0.4 to 0.5 without rebuilding `mangowm` against the new soname. Now unpaused: [`TekkRPMs/scenefx0.4`](https://forgejo.jtekk.dev/TekkRPM/scenefx0.4) backfills the 0.4 slot in `tekk-fedora-44` (parallel-installable with Terra's `scenefx-0.5`), so `mangowm-0.14.4`'s `Requires: libscenefx-0.4.so()(64bit)` resolves again. Retire the compat package once Terra rebuilds `mangowm` against `scenefx-0.5`.
 - **kde-nvidia-open**: bundles NVIDIA's **open kernel modules** driver stream (open source kernel modules, closed userspace). Works on Turing+ / RTX 20-series / GTX 16-series and newer; older cards need the proprietary driver, which we don't yet ship. Kernel modules are pre-built and signed by [ublue-os/akmods](https://github.com/ublue-os/akmods) against exactly the kernel our kinoite base ships (matched by tag pins in `Containerfile.nvidia-open` — Renovate keeps them in step with the base kernel). On Secure Boot systems, ublue's MOK cert is enrolled at first boot via `ublue-os-akmods-secureboot.service` (you'll see the shim MOK enrollment prompt at your first reboot after install).
 - **rawhide channel**: temporarily disabled across all flavors — `apply_signing()` assumes `/etc/containers/policy.json` exists on the base, which F45 kinoite no longer ships. Fix pending; see `plan.md`.
 
@@ -61,7 +61,7 @@ Use `:latest` to follow tip-of-main, `:stable` for the deliberate channel. (`:ra
 - `files/system/` — overlay rsync'd into the image rootfs at the end of `build.sh` (systemd unit files, udev rules, dracut configs, fontconfig, iwd config, etc.).
 - `files/dnf/` — repo definition files (`terra.repo`) copied into `/etc/yum.repos.d/` by `build.sh`.
 - `disk_config/` — [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) configs for qcow2 (`disk.toml`) and ISO (`iso-{kde,kinectic,kde-nvidia-open}.toml`).
-- `.github/workflows/build.yml` — 2D matrix (`desktop × channel` = 3 cells per trigger currently: kde/stable, kinectic/stable, kde-nvidia-open/stable; mango + rawhide temporarily disabled — see README status notes), buildah → ghcr.io → cosign sign. Per-flavor `containerfile:` field selects `./Containerfile` vs `./Containerfile.nvidia-open`.
+- `.github/workflows/build.yml` — 2D matrix (`desktop × channel` = 4 cells per trigger currently: mango/stable, kde/stable, kinectic/stable, kde-nvidia-open/stable; rawhide channel temporarily disabled — see README status notes), buildah → ghcr.io → cosign sign. Per-flavor `containerfile:` field selects `./Containerfile` vs `./Containerfile.nvidia-open`.
 - `.github/workflows/build-disk.yml` — manual workflow that builds qcow2 + ISO from a published tag via bootc-image-builder.
 - `cosign.pub` — signing pubkey baked into the image so the deployed system verifies signatures.
 - `plan.md` — design notes and open items.

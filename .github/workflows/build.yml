@@ -36,13 +36,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Active flavors. mango is temporarily paused — Terra F44 currently
-        # does not publish libscenefx-0.4.so, so mangowm is unresolvable.
-        # Re-add the mango desktop entry once Terra restores scenefx (see
-        # plan.md "mango CI pause"). install_desktop_mango() and the
-        # top-level `./build.sh mango` wrapper case are kept for local
-        # test builds against a fixed-up repo.
+        # Active flavors. mango was CI-paused for ~3 weeks after Terra F44
+        # bumped scenefx 0.4 -> 0.5 without rebuilding mangowm against the
+        # new soname. TekkRPMs/scenefx0.4 now backfills the 0.4 slot in the
+        # tekk-fedora-44 repo (parallel-installable with Terra's scenefx-0.5),
+        # so mangowm-0.14.4's `Requires: libscenefx-0.4.so()(64bit)`
+        # resolves again and mango is back in the matrix.
         desktop:
+          - name: mango
+            base_repo: "quay.io/fedora/fedora-bootc"
+            image: nelhua-mango
+            containerfile: ./Containerfile
+            description: "Nelhua Linux bootc (Mango Wayland compositor)"
+            keywords: "bootc,fedora,wayland,mango,mangowm,nelhua"
           - name: kde
             base_repo: "quay.io/fedora/fedora-kinoite"
             image: nelhua-kde
