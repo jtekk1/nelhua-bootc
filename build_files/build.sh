@@ -295,24 +295,21 @@ install_nvidia_open() {
   # ublue-os-akmods-addons ships:
   #   /etc/pki/akmods/certs/public_key.der  — ublue's MOK signing cert
   #   ublue-os-akmods-secureboot.service    — first-boot MOK enrollment
-  # Install first so the cert is on disk when the kmod RPMs land.
-  dnf_install /akmods-rpms/ublue-os/ublue-os-akmods-addons-*.rpm
-
-  # Pre-signed NVIDIA open kernel module (open-modules variant — Turing+
-  # only, i.e. RTX 20-series / GTX 16-series and newer). Built by ublue's
-  # akmods pipeline against exactly the kernel our base image ships; the
-  # kernel-versioned glob below and the check above are belt-and-suspenders
-  # — even if the tag ships multiple kernel-versioned kmods, we install
-  # only the one that matches our base.
-  dnf_install /akmods-nvidia-rpms/kmods/kmod-nvidia-"${KERNEL_VER}"-*.rpm
-
-  # Userspace stack: nvidia-driver + libs + CUDA runtime + persistenced +
-  # nvidia-modprobe. ublue pre-packages these mirroring RPMFusion's
-  # naming so the kmod's `Requires: nvidia-kmod-common` resolves against
-  # the pre-copied RPMs, not against a fresh RPMFusion depsolve at build
-  # time. Skip i686 (multilib) — kinoite doesn't ship multilib enabled;
-  # Steam/Wine users can `rpm-ostree install` those on their own deploy.
+  #
+  # kmod-nvidia has `Requires: nvidia-kmod-common >= 3:<driverver>`. The
+  # nvidia-kmod-common package lives under /akmods-nvidia-rpms/nvidia/
+  # (ublue pre-packages it alongside the userspace RPMs). If we split
+  # the kmod and nvidia/*.rpm installs into separate dnf5 transactions,
+  # the kmod's Requires falls through to the enabled repos (RPMFusion
+  # nonfree) which typically ships an older nvidia-kmod-common epoch —
+  # dnf5 then errors with "nothing provides nvidia-kmod-common >= 3:...".
+  # Fold everything into a single transaction so dnf5 sees all providers
+  # at once and resolves locally against the ublue-copied RPMs. Skip i686
+  # (multilib) — kinoite doesn't ship multilib enabled; Steam/Wine users
+  # can `rpm-ostree install` those on their own deploy.
   dnf_install \
+    /akmods-rpms/ublue-os/ublue-os-akmods-addons-*.rpm \
+    /akmods-nvidia-rpms/kmods/kmod-nvidia-"${KERNEL_VER}"-*.rpm \
     /akmods-nvidia-rpms/nvidia/*.x86_64.rpm \
     /akmods-nvidia-rpms/nvidia/*.noarch.rpm
 
@@ -668,6 +665,18 @@ data = json.loads(p.read_text())
 # image, which is now signed-only.
 data['default'] = [{'type': 'reject'}]
 data.setdefault('transports', {}).setdefault('docker', {}).setdefault(
+    '', [{'type': 'insecureAcceptAnything'}]
+)
+# Also allow the containers-storage: transport. bootc install-to-filesystem
+# (invoked by bootc-image-builder at qcow2 build time) opens the source
+# image via a containers-storage: URI, and without an explicit entry it
+# falls through to default:reject — every qcow2 disk build then errors
+# with "containers-storage:... is rejected by policy." Local storage is
+# already trusted by the time an image is on disk; signature verification
+# is a docker:-transport concern at fetch time. anaconda-iso doesn't hit
+# this because bootc install-to-filesystem runs at install time on the
+# target, not at build time on the runner.
+data['transports'].setdefault('containers-storage', {}).setdefault(
     '', [{'type': 'insecureAcceptAnything'}]
 )
 data['transports']['docker']['${IMAGE_REGISTRY_PATH}'] = [{
