@@ -25,10 +25,10 @@ ARG BASE_IMAGE=quay.io/fedora/fedora-kinoite:44
 # build_files/build.sh for the exact glob patterns consumed.
 
 # renovate: datasource=docker depName=ghcr.io/ublue-os/akmods
-ARG AKMODS_TAG=main-44-7.1.3-200.fc44
+ARG AKMODS_TAG=main-44-7.1.3-200.fc44@sha256:39da582157a41e9b150f159c6b517fcd8205ee3ca90648d340d2f6d197ec6d78
 
 # renovate: datasource=docker depName=ghcr.io/ublue-os/akmods-nvidia-open
-ARG AKMODS_NVIDIA_OPEN_TAG=main-44-7.1.3-200.fc44
+ARG AKMODS_NVIDIA_OPEN_TAG=main-44-7.1.3-200.fc44@sha256:7442f0d30c1a36ef0e79e7441df4fcfb7cd7d63504620030798042f46937b8a1
 
 FROM ghcr.io/ublue-os/akmods:${AKMODS_TAG} AS akmods
 FROM ghcr.io/ublue-os/akmods-nvidia-open:${AKMODS_NVIDIA_OPEN_TAG} AS akmods-nvidia
