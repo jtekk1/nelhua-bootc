@@ -308,13 +308,26 @@ install_nvidia_open() {
     /akmods-rpms/ublue-os/ublue-os-akmods-addons-*.rpm \
     /akmods-nvidia-rpms/ublue-os/ublue-os-nvidia-addons-*.rpm
 
-  # Enable the fedora-nvidia repos that ublue-os-nvidia-addons just dropped
-  # (they ship enabled=0 by default; ublue's own nvidia-install.sh does the
-  # same enablement). Also disable rpmfusion — its nvidia-driver conflicts
-  # with Negativo17's (different SRPM/patchset). enable_repos() installed
+  # Enable the repos ublue-os-nvidia-addons just dropped (they ship
+  # enabled=0 by default). Two of them matter for the main install:
+  #   fedora-nvidia*         — Negativo17 mirror; provides nvidia-driver-
+  #                            selinux (the previously-missing conditional
+  #                            dep of nvidia-kmod-common) plus userspace
+  #                            overrides.
+  #   nvidia-container-toolkit — NVIDIA's own repo for the container
+  #                            toolkit (needed for `podman
+  #                            --device=nvidia.com/gpu=all`); the toolkit
+  #                            RPM isn't in Fedora, RPMFusion, or the
+  #                            fedora-nvidia repo.
+  # Missing either produces "nothing provides nvidia-driver-selinux" or
+  # "no match for argument: nvidia-container-toolkit" respectively.
+  # Match ublue's nvidia-install.sh single-line enablement.
+  #
+  # Also disable rpmfusion — its nvidia-driver conflicts with Negativo17's
+  # (different SRPM/patchset). enable_repos() installed
   # rpmfusion-nonfree-release earlier for codecs; nothing else in the
   # nvidia-open build path needs it, so this disable is safe.
-  dnf5 config-manager setopt "fedora-nvidia*".enabled=1
+  dnf5 config-manager setopt "fedora-nvidia*".enabled=1 "nvidia-container-toolkit".enabled=1
   if dnf5 repolist --all 2>/dev/null | grep -q rpmfusion; then
     dnf5 config-manager setopt "rpmfusion*".enabled=0
   fi
