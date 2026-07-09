@@ -1,14 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: ./build-qcow2.sh [mango|kde] [tag]
+# Usage: ./build-qcow2.sh [mango|kde|kinectic] [tag]
 DESKTOP="${1:-${DESKTOP:-mango}}"
 TAG="${2:-${TAG:-latest}}"
 
 case "$DESKTOP" in
-  mango) IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
-  kde)   IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
-  *) echo "Unknown desktop: $DESKTOP (mango | kde)" >&2; exit 1 ;;
+  mango)    IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
+  kde)      IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
+  kinectic) IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic}" ;;
+  *) echo "Unknown desktop: $DESKTOP (mango | kde | kinectic)" >&2; exit 1 ;;
 esac
 
 BIB_IMAGE="${BIB_IMAGE:-quay.io/centos-bootc/bootc-image-builder:latest}"
