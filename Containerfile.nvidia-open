@@ -1,0 +1,73 @@
+# Nelhua Linux (KDE + NVIDIA open kernel modules).
+#
+# Differs from ./Containerfile only by pulling two extra FROM stages
+# (ublue-os/akmods + ublue-os/akmods-nvidia-open) and mounting their
+# /rpms/ trees into the main RUN so build_files/build.sh's
+# install_nvidia_open() step can dnf-install pre-built kmods and
+# cert-enrollment RPMs against the kinoite base.
+#
+# The two AKMODS_* tags MUST match the base image's shipped kernel
+# EXACTLY — NVIDIA kmods are compiled against a specific kernel and
+# will refuse to load against any other. Renovate's docker-tag custom-
+# manager (see renovate.json5) bumps both defaults in step with the
+# base image's kernel; if kinoite:44's kernel drifts ahead of ublue's
+# akmods builds, the next PR pin will lag until ublue catches up and
+# the resulting build will fail loudly at modprobe time on first boot.
+#
+# For the pattern rationale (why COPY --from vs bind-mount, why two
+# tags vs one, why we don't consolidate with Containerfile), see
+# .claude/skills/bootc.md § "NVIDIA + akmods on bootc".
+
+ARG BASE_IMAGE=quay.io/fedora/fedora-kinoite:44
+
+# Pre-signed kmods + ublue MOK cert enrollment RPMs. Layout inside each
+# image is /rpms/{kmods,ublue-os}/... — see install_nvidia_open() in
+# build_files/build.sh for the exact glob patterns consumed.
+
+# renovate: datasource=docker depName=ghcr.io/ublue-os/akmods
+ARG AKMODS_TAG=main-44-7.1.3-200.fc44
+
+# renovate: datasource=docker depName=ghcr.io/ublue-os/akmods-nvidia-open
+ARG AKMODS_NVIDIA_OPEN_TAG=main-44-7.1.3-200.fc44
+
+FROM ghcr.io/ublue-os/akmods:${AKMODS_TAG} AS akmods
+FROM ghcr.io/ublue-os/akmods-nvidia-open:${AKMODS_NVIDIA_OPEN_TAG} AS akmods-nvidia
+
+# Build-context staging — kept off the final image via bind-mounts during RUN.
+FROM scratch AS ctx
+COPY build_files /
+COPY cosign.pub /cosign.pub
+COPY files/dnf /repos
+
+FROM scratch AS sysfiles
+COPY files/system /
+
+# Base image — kinoite for the KDE Plasma runtime.
+FROM ${BASE_IMAGE}
+
+ARG IMAGE_NAME=nelhua-kde-nvidia-open
+ARG IMAGE_REGISTRY_PATH=ghcr.io/jtekk1/nelhua-kde-nvidia-open
+ARG DESKTOP=kde-nvidia-open
+ENV IMAGE_NAME=${IMAGE_NAME}
+ENV IMAGE_REGISTRY_PATH=${IMAGE_REGISTRY_PATH}
+ENV DESKTOP=${DESKTOP}
+
+# See Containerfile for context — same /opt symlink fix and /nix mount-target
+# prep as the non-nvidia flavors.
+RUN if [ -L /opt ]; then rm /opt && mkdir -p /opt; fi
+RUN mkdir -p /nix
+
+# Single RUN performs all customization. Two extra mounts vs Containerfile:
+# /akmods-rpms and /akmods-nvidia-rpms surface the pre-built RPM trees from
+# the akmods stages above. install_nvidia_open() dnf-installs from those
+# paths.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=bind,from=sysfiles,source=/,target=/system-files \
+    --mount=type=bind,from=akmods,source=/rpms,target=/akmods-rpms \
+    --mount=type=bind,from=akmods-nvidia,source=/rpms,target=/akmods-nvidia-rpms \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/build.sh
+
+RUN bootc container lint

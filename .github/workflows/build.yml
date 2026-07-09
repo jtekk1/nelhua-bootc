@@ -36,23 +36,41 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Active flavors. mango is temporarily paused — Terra F44 currently
-        # does not publish libscenefx-0.4.so, so mangowm is unresolvable.
-        # Re-add the mango desktop entry once Terra restores scenefx (see
-        # plan.md "mango CI pause"). install_desktop_mango() and the
-        # top-level `./build.sh mango` wrapper case are kept for local
-        # test builds against a fixed-up repo.
+        # Active flavors. mango was CI-paused for ~3 weeks after Terra F44
+        # bumped scenefx 0.4 -> 0.5 without rebuilding mangowm against the
+        # new soname. TekkRPMs/scenefx0.4 now backfills the 0.4 slot in the
+        # tekk-fedora-44 repo (parallel-installable with Terra's scenefx-0.5),
+        # so mangowm-0.14.4's `Requires: libscenefx-0.4.so()(64bit)`
+        # resolves again and mango is back in the matrix.
         desktop:
+          - name: mango
+            base_repo: "quay.io/fedora/fedora-bootc"
+            image: nelhua-mango
+            containerfile: ./Containerfile
+            description: "Nelhua Linux bootc (Mango Wayland compositor)"
+            keywords: "bootc,fedora,wayland,mango,mangowm,nelhua"
           - name: kde
             base_repo: "quay.io/fedora/fedora-kinoite"
             image: nelhua-kde
+            containerfile: ./Containerfile
             description: "Nelhua Linux bootc (KDE edition)"
             keywords: "bootc,fedora,kde,plasma,kinoite,nelhua"
           - name: kinectic
             base_repo: "quay.io/fedora/fedora-kinoite"
             image: nelhua-kinectic
+            containerfile: ./Containerfile
             description: "Nelhua Linux bootc (KineticWE edition — tiling KWin fork)"
             keywords: "bootc,fedora,kde,plasma,kinoite,kineticwe,tiling,nelhua"
+          - name: kde-nvidia-open
+            base_repo: "quay.io/fedora/fedora-kinoite"
+            image: nelhua-kde-nvidia-open
+            # kde-nvidia-open uses a separate Containerfile with two extra
+            # FROM stages for ublue's akmods + akmods-nvidia-open images.
+            # Tag pins for both stages live in Containerfile.nvidia-open;
+            # Renovate keeps them bumped in step with the base kernel.
+            containerfile: ./Containerfile.nvidia-open
+            description: "Nelhua Linux bootc (KDE Plasma 6 + NVIDIA open kernel modules — Turing+ / RTX 20-series and newer)"
+            keywords: "bootc,fedora,kde,plasma,kinoite,nvidia,nvidia-open,nelhua"
         # Rawhide channel is disabled until we fix apply_signing()'s
         # assumption that /etc/containers/policy.json exists on the base
         # image — F45 kinoite doesn't ship it, so every rawhide cell was
@@ -140,7 +158,10 @@ jobs:
         id: build_image
         uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2
         with:
-          containerfiles: ./Containerfile
+          # Per-flavor Containerfile selection: kde/kinectic use ./Containerfile;
+          # kde-nvidia-open uses ./Containerfile.nvidia-open (adds two akmods
+          # FROM stages). Field is set on every matrix.desktop entry.
+          containerfiles: ${{ matrix.desktop.containerfile }}
           image: ${{ env.IMAGE_NAME }}
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}

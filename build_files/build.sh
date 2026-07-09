@@ -262,6 +262,121 @@ install_desktop_kinectic() {
   dnf_install kineticwe
 }
 
+install_nvidia_open() {
+  log "install_nvidia_open"
+  # Containerfile.nvidia-open bind-mounts:
+  #   /akmods-rpms/         <- ghcr.io/ublue-os/akmods:${AKMODS_TAG}/rpms
+  #   /akmods-nvidia-rpms/  <- ghcr.io/ublue-os/akmods-nvidia-open:${AKMODS_NVIDIA_OPEN_TAG}/rpms
+  # See Containerfile.nvidia-open for the "tags must match kernel exactly"
+  # invariant. Renovate keeps AKMODS_TAG / AKMODS_NVIDIA_OPEN_TAG bumped in
+  # step with the kinoite base's kernel.
+
+  # Kmod RPM name embeds the exact kernel it was built for:
+  #   kmod-nvidia-<kernel-ver>-<driver-ver>.<arch>.rpm
+  # If the base image's kernel drifts past what the akmods tag was built
+  # against, modprobe refuses to load nvidia.ko at first boot (-EINVAL /
+  # "invalid module format"). Detect the mismatch at build time so kernel
+  # drift between BASE_IMAGE and AKMODS_NVIDIA_OPEN_TAG surfaces as red
+  # CI, not as an unbootable image landing in production.
+  local KERNEL_VER
+  KERNEL_VER=$(rpm -q kernel-core --qf '%{V}-%{R}.%{ARCH}')
+  log "  -> base kernel: ${KERNEL_VER}"
+  if ! ls /akmods-nvidia-rpms/kmods/kmod-nvidia-"${KERNEL_VER}"-*.rpm >/dev/null 2>&1; then
+    echo "install_nvidia_open: no kmod-nvidia RPM matching base image's kernel ${KERNEL_VER}" >&2
+    echo "  Available kmod-nvidia RPMs under /akmods-nvidia-rpms/kmods/:" >&2
+    ls /akmods-nvidia-rpms/kmods/kmod-nvidia-*.rpm 2>/dev/null | sed 's|^|    |' >&2 || echo "    (none)" >&2
+    echo "  Fix: bump AKMODS_NVIDIA_OPEN_TAG (and AKMODS_TAG) in" >&2
+    echo "       Containerfile.nvidia-open to a tag whose kernel-version" >&2
+    echo "       suffix matches ${KERNEL_VER}, or (if the base image drifted" >&2
+    echo "       ahead of ublue's akmods CI) wait for ublue to catch up." >&2
+    exit 1
+  fi
+
+  # ublue-os-{akmods,nvidia}-addons ship:
+  #   ublue-os-akmods-addons  — MOK signing cert + secureboot first-boot unit
+  #   ublue-os-nvidia-addons  — /etc/yum.repos.d/negativo17-fedora-nvidia*.repo,
+  #                             the Negativo17 mirror that provides
+  #                             nvidia-driver-selinux (conditionally required
+  #                             by nvidia-kmod-common when
+  #                             selinux-policy-targeted is installed, which
+  #                             kinoite always has). Without this, dnf5 errors
+  #                             with "nothing provides nvidia-driver-selinux".
+  # Install both -addons RPMs FIRST — the -nvidia-addons RPM drops the repo
+  # files that the main install below relies on to resolve
+  # nvidia-driver-selinux.
+  dnf5 -y install \
+    /akmods-rpms/ublue-os/ublue-os-akmods-addons-*.rpm \
+    /akmods-nvidia-rpms/ublue-os/ublue-os-nvidia-addons-*.rpm
+
+  # Enable the repos ublue-os-nvidia-addons just dropped (they ship
+  # enabled=0 by default). Two of them matter for the main install:
+  #   fedora-nvidia*         — Negativo17 mirror; provides nvidia-driver-
+  #                            selinux (the previously-missing conditional
+  #                            dep of nvidia-kmod-common) plus userspace
+  #                            overrides.
+  #   nvidia-container-toolkit — NVIDIA's own repo for the container
+  #                            toolkit (needed for `podman
+  #                            --device=nvidia.com/gpu=all`); the toolkit
+  #                            RPM isn't in Fedora, RPMFusion, or the
+  #                            fedora-nvidia repo.
+  # Missing either produces "nothing provides nvidia-driver-selinux" or
+  # "no match for argument: nvidia-container-toolkit" respectively.
+  # Match ublue's nvidia-install.sh single-line enablement.
+  #
+  # Also disable rpmfusion — its nvidia-driver conflicts with Negativo17's
+  # (different SRPM/patchset). enable_repos() installed
+  # rpmfusion-nonfree-release earlier for codecs; nothing else in the
+  # nvidia-open build path needs it, so this disable is safe.
+  dnf5 config-manager setopt "fedora-nvidia*".enabled=1 "nvidia-container-toolkit".enabled=1
+  if dnf5 repolist --all 2>/dev/null | grep -q rpmfusion; then
+    dnf5 config-manager setopt "rpmfusion*".enabled=0
+  fi
+
+  # Main nvidia transaction. kmod + full userspace stack + extras that
+  # ublue always installs (egl-wayland for Wayland, libva-nvidia-driver for
+  # VA-API, nvidia-container-toolkit for podman GPU passthrough). Single
+  # transaction so kmod-nvidia's Requires: nvidia-kmod-common and
+  # nvidia-kmod-common's Requires: nvidia-driver-selinux both resolve
+  # (the former against the pre-copied nvidia/*.noarch.rpm, the latter
+  # against fedora-nvidia we just enabled). Skip i686 (multilib) — kinoite
+  # doesn't ship multilib enabled; Steam/Wine users can rpm-ostree install
+  # those on their own deploy.
+  dnf_install \
+    /akmods-nvidia-rpms/kmods/kmod-nvidia-"${KERNEL_VER}"-*.rpm \
+    /akmods-nvidia-rpms/nvidia/*.x86_64.rpm \
+    /akmods-nvidia-rpms/nvidia/*.noarch.rpm \
+    egl-wayland \
+    libva-nvidia-driver \
+    nvidia-container-toolkit
+
+  # modeset=1 makes DRM the primary driver interface (Wayland requirement);
+  # fbdev=1 keeps the console framebuffer on nvidia too (avoids nouveau/
+  # efifb flicker before the compositor starts). NVreg_UsePageAttributeTable
+  # improves mmap perf; NVreg_PreserveVideoMemoryAllocations survives
+  # suspend/resume without lost surfaces. Same defaults ublue-os ships.
+  install -Dm0644 /dev/stdin /etc/modprobe.d/nvidia.conf <<'EOF'
+options nvidia NVreg_UsePageAttributeTable=1 NVreg_PreserveVideoMemoryAllocations=1
+options nvidia_drm modeset=1 fbdev=1
+EOF
+
+  # Prevent nouveau binding the GPU before nvidia.ko loads. Without this
+  # nouveau claims the card first and nvidia refuses to bind.
+  install -Dm0644 /dev/stdin /etc/modprobe.d/blacklist-nouveau.conf <<'EOF'
+blacklist nouveau
+options nouveau modeset=0
+EOF
+
+  # Include the nvidia modules in the initramfs so the compositor can
+  # bring the display up on first boot without waiting for udev module
+  # loads. bootc-image-builder regenerates the initramfs during ISO/qcow2
+  # build using conf.d in the image, so a drop-in here is enough — no
+  # dracut -f at build time (which wouldn't work inside the buildah
+  # chroot anyway).
+  install -Dm0644 /dev/stdin /etc/dracut.conf.d/nvidia.conf <<'EOF'
+add_drivers+=" nvidia nvidia_drm nvidia_modeset nvidia_uvm "
+EOF
+}
+
 install_lookandfeel_themes() {
   log "install_lookandfeel_themes"
   install -d \
@@ -588,6 +703,18 @@ data['default'] = [{'type': 'reject'}]
 data.setdefault('transports', {}).setdefault('docker', {}).setdefault(
     '', [{'type': 'insecureAcceptAnything'}]
 )
+# Also allow the containers-storage: transport. bootc install-to-filesystem
+# (invoked by bootc-image-builder at qcow2 build time) opens the source
+# image via a containers-storage: URI, and without an explicit entry it
+# falls through to default:reject — every qcow2 disk build then errors
+# with "containers-storage:... is rejected by policy." Local storage is
+# already trusted by the time an image is on disk; signature verification
+# is a docker:-transport concern at fetch time. anaconda-iso doesn't hit
+# this because bootc install-to-filesystem runs at install time on the
+# target, not at build time on the runner.
+data['transports'].setdefault('containers-storage', {}).setdefault(
+    '', [{'type': 'insecureAcceptAnything'}]
+)
 data['transports']['docker']['${IMAGE_REGISTRY_PATH}'] = [{
   'type': 'sigstoreSigned',
   'keyPath': '/etc/pki/containers/${IMAGE_NAME}.pub',
@@ -601,10 +728,11 @@ apply_os_release() {
   log "apply_os_release"
   local pretty
   case "$DESKTOP" in
-    mango)    pretty="Nelhua-Linux (Mango Edition)" ;;
-    kde)      pretty="Nelhua-Linux (KDE)" ;;
-    kinectic) pretty="Nelhua-Linux (KineticWE)" ;;
-    *)        pretty="Nelhua-Linux" ;;
+    mango)           pretty="Nelhua-Linux (Mango Edition)" ;;
+    kde)             pretty="Nelhua-Linux (KDE)" ;;
+    kinectic)        pretty="Nelhua-Linux (KineticWE)" ;;
+    kde-nvidia-open) pretty="Nelhua-Linux (KDE + NVIDIA open)" ;;
+    *)               pretty="Nelhua-Linux" ;;
   esac
   sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"${pretty}\"/" /etc/os-release
 }
@@ -654,10 +782,11 @@ cleanup() {
 
 install_desktop() {
   case "$DESKTOP" in
-    mango)    install_desktop_mango ;;
-    kde)      install_desktop_kde ;;
-    kinectic) install_desktop_kinectic ;;
-    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde|kinectic)" >&2; exit 1 ;;
+    mango)           install_desktop_mango ;;
+    kde)             install_desktop_kde ;;
+    kinectic)        install_desktop_kinectic ;;
+    kde-nvidia-open) install_desktop_kde; install_nvidia_open ;;
+    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde|kinectic|kde-nvidia-open)" >&2; exit 1 ;;
   esac
 }
 
@@ -666,7 +795,7 @@ main() {
   enable_repos
   install_base
   install_hardware
-  install_desktop      # dispatches to install_desktop_{mango,kde,kinectic}
+  install_desktop      # dispatches to install_desktop_{mango,kde,kinectic}; kde-nvidia-open runs kde + install_nvidia_open
   install_extras
   install_icon_themes
   install_superfile

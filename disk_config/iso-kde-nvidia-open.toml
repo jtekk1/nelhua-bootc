@@ -1,0 +1,46 @@
+# bootc-image-builder config for the Nelhua-Linux (KDE + NVIDIA open) installer ISO.
+#
+# Same partition shape as iso-kde.toml (LUKS2 + btrfs on the kinoite base) —
+# the only functional diff is the %post bootc-switch target so installs land
+# on the KDE + NVIDIA open-kernel-modules image stream instead of the stock
+# KDE one.
+#
+# NOTE: this ISO does NOT enroll ublue's MOK cert automatically — the
+# ublue-os-akmods-addons RPM baked into nelhua-kde-nvidia-open handles that
+# on first boot via ublue-os-akmods-secureboot.service. Users on Secure Boot
+# will see the shim MOK prompt at their first reboot after install.
+
+[customizations.installer.kickstart]
+contents = """
+clearpart --all --initlabel
+
+part /boot/efi --fstype=efi --size=1024
+part /boot --fstype=ext4 --size=1024
+part / --fstype=btrfs --grow --encrypted --luks-version=luks2
+
+%post --erroronfail
+bootc switch --mutate-in-place --transport registry ghcr.io/jtekk1/nelhua-kde-nvidia-open:stable
+%end
+"""
+
+[customizations.installer.modules]
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Storage",
+  "org.fedoraproject.Anaconda.Modules.Runtime",
+  "org.fedoraproject.Anaconda.Modules.Network",
+  "org.fedoraproject.Anaconda.Modules.Security",
+  "org.fedoraproject.Anaconda.Modules.Services",
+  "org.fedoraproject.Anaconda.Modules.Users",
+  "org.fedoraproject.Anaconda.Modules.Timezone"
+]
+disable = [
+  "org.fedoraproject.Anaconda.Modules.Subscription"
+]
+
+# Kernel args at install-boot. Tune here when diagnosing plan.md's anaconda
+# reboot-hang. NOTE: NVIDIA modeset args (nvidia_drm.modeset=1) are not needed
+# here — the installer boots on the base kinoite kernel via nouveau; the
+# nvidia kmod loads on first boot of the installed system, driven by
+# /etc/modprobe.d/nvidia-modeset.conf that install_nvidia_open() drops.
+[customizations.kernel]
+append = ""
