@@ -64,13 +64,22 @@ jobs:
           - name: kde-nvidia-open
             base_repo: "quay.io/fedora/fedora-kinoite"
             image: nelhua-kde-nvidia-open
-            # kde-nvidia-open uses a separate Containerfile with two extra
-            # FROM stages for ublue's akmods + akmods-nvidia-open images.
-            # Tag pins for both stages live in Containerfile.nvidia-open;
-            # Renovate keeps them bumped in step with the base kernel.
+            # Both *-nvidia-open flavors use Containerfile.nvidia-open — it
+            # adds two FROM stages for ublue's akmods + akmods-nvidia-open
+            # images. Tag pins for those stages live in the Containerfile;
+            # Renovate keeps them bumped in step with the base kernel. The
+            # flavor is selected by the DESKTOP build-arg, so kinectic-nvidia-
+            # open reuses the same Containerfile with DESKTOP=kinectic-nvidia-
+            # open.
             containerfile: ./Containerfile.nvidia-open
             description: "Nelhua Linux bootc (KDE Plasma 6 + NVIDIA open kernel modules — Turing+ / RTX 20-series and newer)"
             keywords: "bootc,fedora,kde,plasma,kinoite,nvidia,nvidia-open,nelhua"
+          - name: kinectic-nvidia-open
+            base_repo: "quay.io/fedora/fedora-kinoite"
+            image: nelhua-kinectic-nvidia-open
+            containerfile: ./Containerfile.nvidia-open
+            description: "Nelhua Linux bootc (KineticWE tiling KWin fork + NVIDIA open kernel modules — Turing+ / RTX 20-series and newer)"
+            keywords: "bootc,fedora,kde,plasma,kinoite,kineticwe,tiling,nvidia,nvidia-open,nelhua"
         # Rawhide channel is disabled until we fix apply_signing()'s
         # assumption that /etc/containers/policy.json exists on the base
         # image — F45 kinoite doesn't ship it, so every rawhide cell was

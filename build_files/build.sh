@@ -728,11 +728,12 @@ apply_os_release() {
   log "apply_os_release"
   local pretty
   case "$DESKTOP" in
-    mango)           pretty="Nelhua-Linux (Mango Edition)" ;;
-    kde)             pretty="Nelhua-Linux (KDE)" ;;
-    kinectic)        pretty="Nelhua-Linux (KineticWE)" ;;
-    kde-nvidia-open) pretty="Nelhua-Linux (KDE + NVIDIA open)" ;;
-    *)               pretty="Nelhua-Linux" ;;
+    mango)                pretty="Nelhua-Linux (Mango Edition)" ;;
+    kde)                  pretty="Nelhua-Linux (KDE)" ;;
+    kinectic)             pretty="Nelhua-Linux (KineticWE)" ;;
+    kde-nvidia-open)      pretty="Nelhua-Linux (KDE + NVIDIA open)" ;;
+    kinectic-nvidia-open) pretty="Nelhua-Linux (KineticWE + NVIDIA open)" ;;
+    *)                    pretty="Nelhua-Linux" ;;
   esac
   sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"${pretty}\"/" /etc/os-release
 }
@@ -782,11 +783,12 @@ cleanup() {
 
 install_desktop() {
   case "$DESKTOP" in
-    mango)           install_desktop_mango ;;
-    kde)             install_desktop_kde ;;
-    kinectic)        install_desktop_kinectic ;;
-    kde-nvidia-open) install_desktop_kde; install_nvidia_open ;;
-    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde|kinectic|kde-nvidia-open)" >&2; exit 1 ;;
+    mango)                install_desktop_mango ;;
+    kde)                  install_desktop_kde ;;
+    kinectic)             install_desktop_kinectic ;;
+    kde-nvidia-open)      install_desktop_kde;      install_nvidia_open ;;
+    kinectic-nvidia-open) install_desktop_kinectic; install_nvidia_open ;;
+    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde|kinectic|kde-nvidia-open|kinectic-nvidia-open)" >&2; exit 1 ;;
   esac
 }
 
@@ -795,7 +797,7 @@ main() {
   enable_repos
   install_base
   install_hardware
-  install_desktop      # dispatches to install_desktop_{mango,kde,kinectic}; kde-nvidia-open runs kde + install_nvidia_open
+  install_desktop      # dispatches to install_desktop_{mango,kde,kinectic}; *-nvidia-open flavors chain install_nvidia_open after their base install
   install_extras
   install_icon_themes
   install_superfile
