@@ -292,26 +292,49 @@ install_nvidia_open() {
     exit 1
   fi
 
-  # ublue-os-akmods-addons ships:
-  #   /etc/pki/akmods/certs/public_key.der  — ublue's MOK signing cert
-  #   ublue-os-akmods-secureboot.service    — first-boot MOK enrollment
-  #
-  # kmod-nvidia has `Requires: nvidia-kmod-common >= 3:<driverver>`. The
-  # nvidia-kmod-common package lives under /akmods-nvidia-rpms/nvidia/
-  # (ublue pre-packages it alongside the userspace RPMs). If we split
-  # the kmod and nvidia/*.rpm installs into separate dnf5 transactions,
-  # the kmod's Requires falls through to the enabled repos (RPMFusion
-  # nonfree) which typically ships an older nvidia-kmod-common epoch —
-  # dnf5 then errors with "nothing provides nvidia-kmod-common >= 3:...".
-  # Fold everything into a single transaction so dnf5 sees all providers
-  # at once and resolves locally against the ublue-copied RPMs. Skip i686
-  # (multilib) — kinoite doesn't ship multilib enabled; Steam/Wine users
-  # can `rpm-ostree install` those on their own deploy.
-  dnf_install \
+  # ublue-os-{akmods,nvidia}-addons ship:
+  #   ublue-os-akmods-addons  — MOK signing cert + secureboot first-boot unit
+  #   ublue-os-nvidia-addons  — /etc/yum.repos.d/negativo17-fedora-nvidia*.repo,
+  #                             the Negativo17 mirror that provides
+  #                             nvidia-driver-selinux (conditionally required
+  #                             by nvidia-kmod-common when
+  #                             selinux-policy-targeted is installed, which
+  #                             kinoite always has). Without this, dnf5 errors
+  #                             with "nothing provides nvidia-driver-selinux".
+  # Install both -addons RPMs FIRST — the -nvidia-addons RPM drops the repo
+  # files that the main install below relies on to resolve
+  # nvidia-driver-selinux.
+  dnf5 -y install \
     /akmods-rpms/ublue-os/ublue-os-akmods-addons-*.rpm \
+    /akmods-nvidia-rpms/ublue-os/ublue-os-nvidia-addons-*.rpm
+
+  # Enable the fedora-nvidia repos that ublue-os-nvidia-addons just dropped
+  # (they ship enabled=0 by default; ublue's own nvidia-install.sh does the
+  # same enablement). Also disable rpmfusion — its nvidia-driver conflicts
+  # with Negativo17's (different SRPM/patchset). enable_repos() installed
+  # rpmfusion-nonfree-release earlier for codecs; nothing else in the
+  # nvidia-open build path needs it, so this disable is safe.
+  dnf5 config-manager setopt "fedora-nvidia*".enabled=1
+  if dnf5 repolist --all 2>/dev/null | grep -q rpmfusion; then
+    dnf5 config-manager setopt "rpmfusion*".enabled=0
+  fi
+
+  # Main nvidia transaction. kmod + full userspace stack + extras that
+  # ublue always installs (egl-wayland for Wayland, libva-nvidia-driver for
+  # VA-API, nvidia-container-toolkit for podman GPU passthrough). Single
+  # transaction so kmod-nvidia's Requires: nvidia-kmod-common and
+  # nvidia-kmod-common's Requires: nvidia-driver-selinux both resolve
+  # (the former against the pre-copied nvidia/*.noarch.rpm, the latter
+  # against fedora-nvidia we just enabled). Skip i686 (multilib) — kinoite
+  # doesn't ship multilib enabled; Steam/Wine users can rpm-ostree install
+  # those on their own deploy.
+  dnf_install \
     /akmods-nvidia-rpms/kmods/kmod-nvidia-"${KERNEL_VER}"-*.rpm \
     /akmods-nvidia-rpms/nvidia/*.x86_64.rpm \
-    /akmods-nvidia-rpms/nvidia/*.noarch.rpm
+    /akmods-nvidia-rpms/nvidia/*.noarch.rpm \
+    egl-wayland \
+    libva-nvidia-driver \
+    nvidia-container-toolkit
 
   # modeset=1 makes DRM the primary driver interface (Wayland requirement);
   # fbdev=1 keeps the console framebuffer on nvidia too (avoids nouveau/

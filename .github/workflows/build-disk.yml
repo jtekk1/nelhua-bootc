@@ -65,6 +65,16 @@ jobs:
   build:
     name: Build disk images
     runs-on: ${{ inputs.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    # On pull_request, bootc install-to-filesystem opens the ALREADY-PUBLISHED
+    # target image (e.g. nelhua-kde:latest) whose baked-in policy.json still
+    # rejects containers-storage: — the fix for that ships in apply_signing()
+    # on this branch, but PR builds don't push, so the policy fix only takes
+    # effect on the next main rebuild after merge. Keep the disk build
+    # running (surfaces genuine regressions in the iso configs) but don't
+    # block PR merge on it during this transition. Once :latest carries the
+    # containers-storage allowance the failure stops flapping and this line
+    # is safe to remove.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     strategy:
       fail-fast: false
       matrix:
