@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: ./build-iso.sh [mango|kde|kinectic|kde-nvidia-open] [tag]
+# Usage: ./build-iso.sh [mango|kde|kinectic|kde-nvidia-open|kinectic-nvidia-open] [tag]
 #
 # Builds an Anaconda installer ISO for the chosen desktop variant. Local only —
 # there's no cloud host for these yet, so the ISO lands in ./output/bootiso/
@@ -22,11 +22,12 @@ DESKTOP="${1:-${DESKTOP:-mango}}"
 TAG="${2:-${TAG:-latest}}"
 
 case "$DESKTOP" in
-  mango)           IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
-  kde)             IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
-  kinectic)        IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic}" ;;
-  kde-nvidia-open) IMAGE_NAME="${IMAGE_NAME:-nelhua-kde-nvidia-open}" ;;
-  *) echo "Unknown desktop: $DESKTOP (mango | kde | kinectic | kde-nvidia-open)" >&2; exit 1 ;;
+  mango)                IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
+  kde)                  IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
+  kinectic)             IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic}" ;;
+  kde-nvidia-open)      IMAGE_NAME="${IMAGE_NAME:-nelhua-kde-nvidia-open}" ;;
+  kinectic-nvidia-open) IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic-nvidia-open}" ;;
+  *) echo "Unknown desktop: $DESKTOP (mango | kde | kinectic | kde-nvidia-open | kinectic-nvidia-open)" >&2; exit 1 ;;
 esac
 
 BIB_IMAGE="${BIB_IMAGE:-quay.io/centos-bootc/bootc-image-builder:latest}"

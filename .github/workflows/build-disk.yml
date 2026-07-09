@@ -13,6 +13,7 @@ on:
           - kde
           - kinectic
           - kde-nvidia-open
+          - kinectic-nvidia-open
       upload-to-s3:
         description: "Upload to S3"
         required: false
@@ -37,6 +38,7 @@ on:
       - 'disk_config/iso-kde.toml'
       - 'disk_config/iso-kinectic.toml'
       - 'disk_config/iso-kde-nvidia-open.toml'
+      - 'disk_config/iso-kinectic-nvidia-open.toml'
       - '.github/workflows/build-disk.yml'
 
 env:

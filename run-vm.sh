@@ -1,16 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: TYPE=qcow2 ./run-vm.sh [mango|kde|kinectic|kde-nvidia-open]
+# Usage: TYPE=qcow2 ./run-vm.sh [mango|kde|kinectic|kde-nvidia-open|kinectic-nvidia-open]
 DESKTOP="${1:-${DESKTOP:-mango}}"
 TYPE="${TYPE:-qcow2}"
 
 case "$DESKTOP" in
-  mango)           IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
-  kde)             IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
-  kinectic)        IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic}" ;;
-  kde-nvidia-open) IMAGE_NAME="${IMAGE_NAME:-nelhua-kde-nvidia-open}" ;;
-  *) echo "Unknown desktop: $DESKTOP (mango | kde | kinectic | kde-nvidia-open)" >&2; exit 1 ;;
+  mango)                IMAGE_NAME="${IMAGE_NAME:-nelhua-mango}" ;;
+  kde)                  IMAGE_NAME="${IMAGE_NAME:-nelhua-kde}" ;;
+  kinectic)             IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic}" ;;
+  kde-nvidia-open)      IMAGE_NAME="${IMAGE_NAME:-nelhua-kde-nvidia-open}" ;;
+  kinectic-nvidia-open) IMAGE_NAME="${IMAGE_NAME:-nelhua-kinectic-nvidia-open}" ;;
+  *) echo "Unknown desktop: $DESKTOP (mango | kde | kinectic | kde-nvidia-open | kinectic-nvidia-open)" >&2; exit 1 ;;
 esac
 
 cd "$(dirname "$0")"

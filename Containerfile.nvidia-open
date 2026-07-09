@@ -1,7 +1,12 @@
-# Nelhua Linux (KDE + NVIDIA open kernel modules).
+# Nelhua Linux (kinoite-based flavors + NVIDIA open kernel modules).
 #
-# Differs from ./Containerfile only by pulling two extra FROM stages
-# (ublue-os/akmods + ublue-os/akmods-nvidia-open) and mounting their
+# Shared Containerfile for every kinoite-derived flavor that layers on
+# NVIDIA's open kernel modules — currently kde-nvidia-open and
+# kinectic-nvidia-open. The flavor is selected at build time via the
+# DESKTOP build-arg (passed through to build_files/build.sh), so this
+# file stays desktop-agnostic; the only difference from plain
+# ./Containerfile is that it pulls two extra FROM stages
+# (ublue-os/akmods + ublue-os/akmods-nvidia-open) and mounts their
 # /rpms/ trees into the main RUN so build_files/build.sh's
 # install_nvidia_open() step can dnf-install pre-built kmods and
 # cert-enrollment RPMs against the kinoite base.
@@ -42,7 +47,8 @@ COPY files/dnf /repos
 FROM scratch AS sysfiles
 COPY files/system /
 
-# Base image — kinoite for the KDE Plasma runtime.
+# Base image — kinoite carries the KDE Plasma / KWin runtime that both
+# NVIDIA-open flavors ride on (KineticWE is a KWin fork).
 FROM ${BASE_IMAGE}
 
 ARG IMAGE_NAME=nelhua-kde-nvidia-open
