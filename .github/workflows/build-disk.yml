@@ -4,6 +4,15 @@ name: Build disk images
 on:
   workflow_dispatch:
     inputs:
+      desktop:
+        description: "Desktop flavor to build disk images for"
+        required: false
+        default: "kde"
+        type: choice
+        options:
+          - kde
+          - kinectic
+          - kde-nvidia-open
       upload-to-s3:
         description: "Upload to S3"
         required: false
@@ -26,10 +35,16 @@ on:
       - 'disk_config/disk.toml'
       - 'disk_config/iso-mango.toml'
       - 'disk_config/iso-kde.toml'
+      - 'disk_config/iso-kinectic.toml'
+      - 'disk_config/iso-kde-nvidia-open.toml'
       - '.github/workflows/build-disk.yml'
 
 env:
-  IMAGE_NAME: "nelhua-mango"
+  # DESKTOP is resolved in the Prepare environment step below — falls back
+  # to 'kde' on pull_request triggers (no workflow_dispatch input) and when
+  # workflow_dispatch is triggered without an explicit desktop pick. mango
+  # is intentionally NOT in the choice options — the flavor is CI-paused
+  # (see README status notes); local `./build-iso.sh mango` still works.
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
   DEFAULT_TAG: ${{ inputs.tag || 'stable' }}
   BIB_IMAGE: "quay.io/centos-bootc/bootc-image-builder:latest"
@@ -54,12 +69,26 @@ jobs:
     steps:
       - name: Prepare environment
         run: |
+          # DESKTOP: use the workflow_dispatch input if present, otherwise
+          # 'kde' (pull_request triggers or dispatch-without-input). IMAGE_NAME
+          # follows the nelhua-<desktop> convention across all flavors.
+          # CONFIG_FILE picks the per-desktop iso config for anaconda-iso
+          # builds; qcow2 uses the shared disk.toml.
+          DESKTOP="${{ inputs.desktop || 'kde' }}"
+          IMAGE_NAME="nelhua-${DESKTOP}"
+          DISK_TYPE=$(echo "${{ matrix.disk-type }}" | tr ' ' '-')
+          if [[ "$DISK_TYPE" == "anaconda-iso" ]]; then
+            CONFIG_FILE="./disk_config/iso-${DESKTOP}.toml"
+          else
+            CONFIG_FILE="./disk_config/disk.toml"
+          fi
           USER_UID=$(id -u)
           USER_GID=$(id -g)
-          DISK_TYPE=$(echo "${{ matrix.disk-type }}" | tr ' ' '-')
+          echo "DESKTOP=${DESKTOP}" >> "$GITHUB_ENV"
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "$GITHUB_ENV"
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
           echo "DISK_TYPE=${DISK_TYPE}" >> "$GITHUB_ENV"
+          echo "CONFIG_FILE=${CONFIG_FILE}" >> "$GITHUB_ENV"
           echo "USER_UID=${USER_UID}" >> "$GITHUB_ENV"
           echo "USER_GID=${USER_GID}" >> "$GITHUB_ENV"
 
@@ -83,10 +112,9 @@ jobs:
         uses: osbuild/bootc-image-builder-action@30960621b85c9e76c653082f9ef4cab5a10210d5 # main
         with:
           builder-image: ${{ env.BIB_IMAGE }}
-          # CI still mango-only ("no cloud yet for the KDE ISO"); the
-          # iso-mango.toml is the renamed-from-iso.toml file. KDE ISO is
-          # built locally via ./build-iso.sh kde until we have a host.
-          config-file: ${{ matrix.disk-type == 'anaconda-iso' && './disk_config/iso-mango.toml' || './disk_config/disk.toml' }}
+          # CONFIG_FILE resolved per (matrix.disk-type, inputs.desktop) in
+          # the Prepare environment step above.
+          config-file: ${{ env.CONFIG_FILE }}
           image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
           chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
           types: ${{ matrix.disk-type }}

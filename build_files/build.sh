@@ -262,6 +262,88 @@ install_desktop_kinectic() {
   dnf_install kineticwe
 }
 
+install_nvidia_open() {
+  log "install_nvidia_open"
+  # Containerfile.nvidia-open bind-mounts:
+  #   /akmods-rpms/         <- ghcr.io/ublue-os/akmods:${AKMODS_TAG}/rpms
+  #   /akmods-nvidia-rpms/  <- ghcr.io/ublue-os/akmods-nvidia-open:${AKMODS_NVIDIA_OPEN_TAG}/rpms
+  # See Containerfile.nvidia-open for the "tags must match kernel exactly"
+  # invariant. Renovate keeps AKMODS_TAG / AKMODS_NVIDIA_OPEN_TAG bumped in
+  # step with the kinoite base's kernel.
+
+  # Kmod RPM name embeds the exact kernel it was built for:
+  #   kmod-nvidia-<kernel-ver>-<driver-ver>.<arch>.rpm
+  # If the base image's kernel drifts past what the akmods tag was built
+  # against, modprobe refuses to load nvidia.ko at first boot (-EINVAL /
+  # "invalid module format"). Detect the mismatch at build time so kernel
+  # drift between BASE_IMAGE and AKMODS_NVIDIA_OPEN_TAG surfaces as red
+  # CI, not as an unbootable image landing in production.
+  local KERNEL_VER
+  KERNEL_VER=$(rpm -q kernel-core --qf '%{V}-%{R}.%{ARCH}')
+  log "  -> base kernel: ${KERNEL_VER}"
+  if ! ls /akmods-nvidia-rpms/kmods/kmod-nvidia-"${KERNEL_VER}"-*.rpm >/dev/null 2>&1; then
+    echo "install_nvidia_open: no kmod-nvidia RPM matching base image's kernel ${KERNEL_VER}" >&2
+    echo "  Available kmod-nvidia RPMs under /akmods-nvidia-rpms/kmods/:" >&2
+    ls /akmods-nvidia-rpms/kmods/kmod-nvidia-*.rpm 2>/dev/null | sed 's|^|    |' >&2 || echo "    (none)" >&2
+    echo "  Fix: bump AKMODS_NVIDIA_OPEN_TAG (and AKMODS_TAG) in" >&2
+    echo "       Containerfile.nvidia-open to a tag whose kernel-version" >&2
+    echo "       suffix matches ${KERNEL_VER}, or (if the base image drifted" >&2
+    echo "       ahead of ublue's akmods CI) wait for ublue to catch up." >&2
+    exit 1
+  fi
+
+  # ublue-os-akmods-addons ships:
+  #   /etc/pki/akmods/certs/public_key.der  — ublue's MOK signing cert
+  #   ublue-os-akmods-secureboot.service    — first-boot MOK enrollment
+  # Install first so the cert is on disk when the kmod RPMs land.
+  dnf_install /akmods-rpms/ublue-os/ublue-os-akmods-addons-*.rpm
+
+  # Pre-signed NVIDIA open kernel module (open-modules variant — Turing+
+  # only, i.e. RTX 20-series / GTX 16-series and newer). Built by ublue's
+  # akmods pipeline against exactly the kernel our base image ships; the
+  # kernel-versioned glob below and the check above are belt-and-suspenders
+  # — even if the tag ships multiple kernel-versioned kmods, we install
+  # only the one that matches our base.
+  dnf_install /akmods-nvidia-rpms/kmods/kmod-nvidia-"${KERNEL_VER}"-*.rpm
+
+  # Userspace stack: nvidia-driver + libs + CUDA runtime + persistenced +
+  # nvidia-modprobe. ublue pre-packages these mirroring RPMFusion's
+  # naming so the kmod's `Requires: nvidia-kmod-common` resolves against
+  # the pre-copied RPMs, not against a fresh RPMFusion depsolve at build
+  # time. Skip i686 (multilib) — kinoite doesn't ship multilib enabled;
+  # Steam/Wine users can `rpm-ostree install` those on their own deploy.
+  dnf_install \
+    /akmods-nvidia-rpms/nvidia/*.x86_64.rpm \
+    /akmods-nvidia-rpms/nvidia/*.noarch.rpm
+
+  # modeset=1 makes DRM the primary driver interface (Wayland requirement);
+  # fbdev=1 keeps the console framebuffer on nvidia too (avoids nouveau/
+  # efifb flicker before the compositor starts). NVreg_UsePageAttributeTable
+  # improves mmap perf; NVreg_PreserveVideoMemoryAllocations survives
+  # suspend/resume without lost surfaces. Same defaults ublue-os ships.
+  install -Dm0644 /dev/stdin /etc/modprobe.d/nvidia.conf <<'EOF'
+options nvidia NVreg_UsePageAttributeTable=1 NVreg_PreserveVideoMemoryAllocations=1
+options nvidia_drm modeset=1 fbdev=1
+EOF
+
+  # Prevent nouveau binding the GPU before nvidia.ko loads. Without this
+  # nouveau claims the card first and nvidia refuses to bind.
+  install -Dm0644 /dev/stdin /etc/modprobe.d/blacklist-nouveau.conf <<'EOF'
+blacklist nouveau
+options nouveau modeset=0
+EOF
+
+  # Include the nvidia modules in the initramfs so the compositor can
+  # bring the display up on first boot without waiting for udev module
+  # loads. bootc-image-builder regenerates the initramfs during ISO/qcow2
+  # build using conf.d in the image, so a drop-in here is enough — no
+  # dracut -f at build time (which wouldn't work inside the buildah
+  # chroot anyway).
+  install -Dm0644 /dev/stdin /etc/dracut.conf.d/nvidia.conf <<'EOF'
+add_drivers+=" nvidia nvidia_drm nvidia_modeset nvidia_uvm "
+EOF
+}
+
 install_lookandfeel_themes() {
   log "install_lookandfeel_themes"
   install -d \
@@ -601,10 +683,11 @@ apply_os_release() {
   log "apply_os_release"
   local pretty
   case "$DESKTOP" in
-    mango)    pretty="Nelhua-Linux (Mango Edition)" ;;
-    kde)      pretty="Nelhua-Linux (KDE)" ;;
-    kinectic) pretty="Nelhua-Linux (KineticWE)" ;;
-    *)        pretty="Nelhua-Linux" ;;
+    mango)           pretty="Nelhua-Linux (Mango Edition)" ;;
+    kde)             pretty="Nelhua-Linux (KDE)" ;;
+    kinectic)        pretty="Nelhua-Linux (KineticWE)" ;;
+    kde-nvidia-open) pretty="Nelhua-Linux (KDE + NVIDIA open)" ;;
+    *)               pretty="Nelhua-Linux" ;;
   esac
   sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"${pretty}\"/" /etc/os-release
 }
@@ -654,10 +737,11 @@ cleanup() {
 
 install_desktop() {
   case "$DESKTOP" in
-    mango)    install_desktop_mango ;;
-    kde)      install_desktop_kde ;;
-    kinectic) install_desktop_kinectic ;;
-    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde|kinectic)" >&2; exit 1 ;;
+    mango)           install_desktop_mango ;;
+    kde)             install_desktop_kde ;;
+    kinectic)        install_desktop_kinectic ;;
+    kde-nvidia-open) install_desktop_kde; install_nvidia_open ;;
+    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde|kinectic|kde-nvidia-open)" >&2; exit 1 ;;
   esac
 }
 
@@ -666,7 +750,7 @@ main() {
   enable_repos
   install_base
   install_hardware
-  install_desktop      # dispatches to install_desktop_{mango,kde,kinectic}
+  install_desktop      # dispatches to install_desktop_{mango,kde,kinectic}; kde-nvidia-open runs kde + install_nvidia_open
   install_extras
   install_icon_themes
   install_superfile

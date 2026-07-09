@@ -32,6 +32,19 @@
       "matchCurrentValue": "44",
       "enabled": false,
     },
+
+    // Ublue akmods pair — grouped so they bump together, never auto-merge.
+    // The kernel-lock invariant (kmod version must match kinoite's shipped
+    // kernel) means a naive Renovate bump can produce an unbootable image;
+    // we manually verify the kernel version alignment before merging.
+    {
+      "matchPackageNames": [
+        "ghcr.io/ublue-os/akmods",
+        "ghcr.io/ublue-os/akmods-nvidia-open",
+      ],
+      "groupName": "ublue akmods",
+      "automerge": false,
+    },
   ],
 
   // Custom regex managers — pick up out-of-band pins inside build.sh that
@@ -89,6 +102,25 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s*\\n\\s*env:\\s*\\n\\s*CHUNKAH_IMAGE: \"[^:]+:(?<currentValue>v[^\"]+)\"",
       ],
+    },
+
+    // Ublue akmods + akmods-nvidia-open kernel-module images used by the
+    // kde-nvidia-open flavor. Pins live as ARG defaults in
+    // Containerfile.nvidia-open — Renovate's default Dockerfile manager
+    // does NOT resolve `FROM $IMG:${ARG}` back to the ARG line, so we
+    // point a regex manager at the ARG lines directly.
+    //
+    // Both tags MUST bump together and MUST match the base image's
+    // shipped kernel exactly (kmod ABI is kernel-version-locked). A
+    // stray bump alone would produce an unbootable image — see the
+    // packageRule below that groups + disables auto-merge for this pair.
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["^Containerfile\\.nvidia-open$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s*\\nARG \\S+=(?<currentValue>\\S+)",
+      ],
+      "versioningTemplate": "loose",
     },
   ],
 }
