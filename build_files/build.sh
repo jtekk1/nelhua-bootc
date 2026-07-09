@@ -58,7 +58,16 @@ enable_repos() {
     https://pkgs.tailscale.com/stable/fedora/tailscale.repo
 
   log "  -> Charm repo (gum, glow, vhs, soft-serve)"
-  rpm --import https://repo.charm.sh/yum/gpg.key
+  # Charm's GPG key is vendored (files/dnf/charm.key) rather than fetched.
+  # repo.charm.sh is Gemfury-backed and has been unreliable — three
+  # consecutive CI runs hit `curl: (7) Failed to connect ... after 79s`
+  # on the gpg.key path while the same host resolved fine locally elsewhere.
+  # The vendored key is rsa4096 (fingerprint ED927B38…4DFD35C), expires
+  # 2027-07-13. baseurl= stays remote for package fetch; charm.repo's
+  # gpgkey= now points at the vendored key at /etc/pki/rpm-gpg/… so
+  # runtime dnf-refresh doesn't refetch the key either.
+  install -Dm0644 /ctx/repos/charm.key /etc/pki/rpm-gpg/RPM-GPG-KEY-charm
+  rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-charm
   install -Dm0644 /ctx/repos/charm.repo /etc/yum.repos.d/charm.repo
 
   log "  -> Tekk forgejo repo"
@@ -214,6 +223,43 @@ install_desktop_kde() {
   # effects/ — *available* in System Settings → Window Effects but not
   # enabled by default. Same posture as the LAFs above.
   install_kwin_effects
+}
+
+install_desktop_kinectic() {
+  log "install_desktop_kinectic"
+  # Same kinoite base as the KDE flavor — Plasma 6 + plasma-login-manager +
+  # xdg-desktop-portal-kde come from the base. Kinectic swaps the stock KWin
+  # family (kwin, kwin-common, kwin-libs, kwin-wayland, kglobalacceld) for
+  # KineticWE, a native-tiling KWin fork by theblackdon
+  # (https://gitlab.com/theblackdon/kineticwe). The COPR-built RPM
+  # Provides+Obsoletes all five, so a plain `dnf install kineticwe`
+  # performs the swap in one transaction — no --allowerasing / no
+  # dnf swap gymnastics.
+  #
+  # Reuse the theme + JS-effect layers from the KDE flavor: KWin's JS
+  # scripting API and /usr/share/plasma paths are stable across the fork,
+  # so LAFs and JS effect kpackages ride through cleanly.
+  #
+  # NOT reused: kwin-effects-glass. It's a C++ KWin plugin compiled against
+  # stock kwin's headers; loading it into kineticwe.so is an ABI gamble
+  # until upstream confirms compatibility.
+  install_lookandfeel_themes
+  install_kwin_effects
+
+  # theblackdon/kineticwe COPR chroots: fedora-44 + fedora-rawhide only.
+  # `dnf5 copr enable` errors hard if the chroot is missing; guard on
+  # rawhide the same way enable_repos() guards ama1470/kwin-effects-glass.
+  # dnf_install below uses --skip-unavailable on rawhide, so a failed
+  # enable no-ops cleanly there (rawhide is continue-on-error already).
+  log "  -> COPR theblackdon/kineticwe"
+  if (( IS_RAWHIDE )); then
+    dnf5 -y copr enable theblackdon/kineticwe || \
+      log "  -> COPR kineticwe: SKIPPED on rawhide (chroot not yet published)"
+  else
+    dnf5 -y copr enable theblackdon/kineticwe
+  fi
+
+  dnf_install kineticwe
 }
 
 install_lookandfeel_themes() {
@@ -555,9 +601,10 @@ apply_os_release() {
   log "apply_os_release"
   local pretty
   case "$DESKTOP" in
-    mango) pretty="Nelhua-Linux (Mango Edition)" ;;
-    kde)   pretty="Nelhua-Linux (KDE)" ;;
-    *)     pretty="Nelhua-Linux" ;;
+    mango)    pretty="Nelhua-Linux (Mango Edition)" ;;
+    kde)      pretty="Nelhua-Linux (KDE)" ;;
+    kinectic) pretty="Nelhua-Linux (KineticWE)" ;;
+    *)        pretty="Nelhua-Linux" ;;
   esac
   sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"${pretty}\"/" /etc/os-release
 }
@@ -607,9 +654,10 @@ cleanup() {
 
 install_desktop() {
   case "$DESKTOP" in
-    mango) install_desktop_mango ;;
-    kde)   install_desktop_kde ;;
-    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde)" >&2; exit 1 ;;
+    mango)    install_desktop_mango ;;
+    kde)      install_desktop_kde ;;
+    kinectic) install_desktop_kinectic ;;
+    *) echo "Unknown DESKTOP='$DESKTOP' (expected mango|kde|kinectic)" >&2; exit 1 ;;
   esac
 }
 
@@ -618,7 +666,7 @@ main() {
   enable_repos
   install_base
   install_hardware
-  install_desktop      # dispatches to install_desktop_mango or install_desktop_kde
+  install_desktop      # dispatches to install_desktop_{mango,kde,kinectic}
   install_extras
   install_icon_themes
   install_superfile
