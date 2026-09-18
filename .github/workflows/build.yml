@@ -24,7 +24,7 @@ concurrency:
 jobs:
   build_push:
     name: ${{ matrix.desktop.name }} / ${{ matrix.channel.name }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # Rawhide is best-effort — F45 / kinoite:rawhide may lack repo parity.
     # Don't fail the workflow when rawhide cells break; stable cells are binding.
     continue-on-error: ${{ matrix.channel.name == 'rawhide' }}
